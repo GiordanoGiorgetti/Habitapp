@@ -10,6 +10,7 @@ import {
   doc,
   setDoc,
   addDoc,
+  serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 // 🔧 自分の firebaseConfig を貼る
@@ -72,6 +73,7 @@ const historyChartEmpty = document.getElementById("history-chart-empty");
 const historyCalendar = document.getElementById("history-calendar");
 const historyCalendarEmpty = document.getElementById("history-calendar-empty");
 const toastElement = document.getElementById("app-toast");
+const offlineWarning = document.getElementById("offline-warning");
 
 let habitEditorCache = [];
 let activeHabitsCache = [];
@@ -313,6 +315,40 @@ function showToast(message, variant = "success") {
   }, 2500);
 }
 
+function logAndToastError(logMessage, error, toastMessage = "エラーが発生しました") {
+  console.error(logMessage, error);
+  showToast(toastMessage, "error");
+}
+
+let lastKnownOnlineStatus = null;
+
+function updateConnectivityState(isOnline, { silent = false } = {}) {
+  if (offlineWarning) {
+    offlineWarning.hidden = isOnline;
+  }
+  if (saveBtn) {
+    saveBtn.disabled = !isOnline;
+  }
+  if (saveStatus) {
+    if (!isOnline) {
+      saveStatus.dataset.offlineMessage = "true";
+      saveStatus.textContent = "オフラインのため保存できません";
+    } else if (saveStatus.dataset.offlineMessage === "true") {
+      saveStatus.textContent = "";
+      delete saveStatus.dataset.offlineMessage;
+    }
+  }
+  if (!silent && lastKnownOnlineStatus !== isOnline) {
+    showToast(
+      isOnline
+        ? "オンラインに再接続しました"
+        : "オフラインです。接続を確認してください。",
+      isOnline ? "info" : "error"
+    );
+  }
+  lastKnownOnlineStatus = isOnline;
+}
+
 function renderHabitEditorList(habits) {
   if (!habitEditorList || !habitEditorEmpty) return;
   habitEditorList.innerHTML = "";
@@ -439,7 +475,7 @@ async function refreshActiveHabitList() {
     updateActiveHabitsCache(activeHabits);
     renderActiveHabits(activeHabits);
   } catch (error) {
-    console.error("Failed to load active habits", error);
+    logAndToastError("Failed to load active habits", error, "習慣の読み込みに失敗しました");
   }
 }
 
@@ -449,7 +485,7 @@ async function loadHabitsForEditor() {
     updateActiveHabitsCache(habitEditorCache);
     renderHabitEditorList(habitEditorCache);
   } catch (error) {
-    console.error("Failed to load habits", error);
+    logAndToastError("Failed to load habits", error, "習慣の読み込みに失敗しました");
     if (habitEditorError) {
       habitEditorError.textContent = "習慣の読み込みに失敗しました";
     }
@@ -465,7 +501,6 @@ async function loadEntry(dateStr) {
 }
 
 async function saveEntry(dateStr) {
-  const timestamp = new Date();
   const values = { ...(currentEntryData?.values ?? {}) };
   activeHabitsCache.forEach((habit) => {
     if (!habit?.id) return;
@@ -494,17 +529,25 @@ async function saveEntry(dateStr) {
       values[key] = null;
     }
   });
-  const data = {
+  const docId = `entry_${dateStr}`;
+  const entryRef = doc(db, "entries", docId);
+  const payload = {
     date: dateStr,
     study: { minutes: Number(studyMinutesInput.value || 0) },
     diary: diaryInput.value || "",
     memo: memoInput.value || "",
     values,
-    updatedAt: timestamp,
+    updatedAt: serverTimestamp(),
   };
-  const docId = `entry_${dateStr}`;
-  await setDoc(doc(db, "entries", docId), data, { merge: true });
-  return { id: docId, ...data };
+  if (!currentEntryData?.id) {
+    payload.createdAt = serverTimestamp();
+  }
+  await setDoc(entryRef, payload, { merge: true });
+  const savedSnap = await getDoc(entryRef);
+  if (savedSnap.exists()) {
+    return { id: savedSnap.id, ...savedSnap.data() };
+  }
+  return { id: docId, ...payload };
 }
 
 function showEntry(dateStr, entry) {
@@ -544,12 +587,19 @@ async function changeViewingDate(dateStr) {
     const entry = await loadEntry(dateStr);
     showEntry(dateStr, entry);
   } catch (error) {
-    console.error("Failed to load entry", error);
-    showToast("データの読み込みに失敗しました", "error");
+    logAndToastError("Failed to load entry", error, "データの読み込みに失敗しました");
   }
 }
 
 saveBtn?.addEventListener("click", async () => {
+  if (!navigator.onLine) {
+    if (saveStatus) {
+      saveStatus.dataset.offlineMessage = "true";
+      saveStatus.textContent = "オフラインのため保存できません";
+    }
+    showToast("オフラインのため保存できません。接続後に再試行してください。", "error");
+    return;
+  }
   if (saveStatus) {
     saveStatus.textContent = "保存中...";
   }
@@ -570,11 +620,10 @@ saveBtn?.addEventListener("click", async () => {
     }
     showToast("保存しました", "success");
   } catch (error) {
-    console.error("Failed to save entry", error);
+    logAndToastError("Failed to save entry", error, "保存に失敗しました");
     if (saveStatus) {
       saveStatus.textContent = "保存に失敗しました";
     }
-    showToast("保存に失敗しました", "error");
   }
 });
 
@@ -1029,7 +1078,7 @@ async function loadHistoryData() {
     updateHistoryStatus("", "info");
     updateHistoryView();
   } catch (error) {
-    console.error("Failed to load history data", error);
+    logAndToastError("Failed to load history data", error, "履歴の読み込みに失敗しました");
     updateHistoryStatus("履歴の読み込みに失敗しました", "error");
     if (historyChartContainer) {
       historyChartContainer.classList.add("is-hidden");
@@ -1207,7 +1256,7 @@ habitEditorList?.addEventListener("submit", async (event) => {
     unit,
     active,
     order,
-    updatedAt: new Date(),
+    updatedAt: serverTimestamp(),
   };
 
   const status = form.querySelector(".habit-editor__status");
@@ -1231,7 +1280,7 @@ habitEditorList?.addEventListener("submit", async (event) => {
       }, 1500);
     }
   } catch (error) {
-    console.error("Failed to update habit", error);
+    logAndToastError("Failed to update habit", error, "習慣の更新に失敗しました");
     if (status) {
       status.textContent = "保存に失敗しました";
     }
@@ -1256,7 +1305,7 @@ habitEditorList?.addEventListener("click", async (event) => {
   try {
     await setDoc(
       doc(db, "habits", habitId),
-      { active: false, updatedAt: new Date() },
+      { active: false, updatedAt: serverTimestamp() },
       { merge: true }
     );
     habitEditorCache = habitEditorCache.map((habit) =>
@@ -1277,7 +1326,7 @@ habitEditorList?.addEventListener("click", async (event) => {
       }, 1500);
     }
   } catch (error) {
-    console.error("Failed to deactivate habit", error);
+    logAndToastError("Failed to deactivate habit", error, "習慣の更新に失敗しました");
     if (status) {
       status.textContent = "削除に失敗しました";
     }
@@ -1305,15 +1354,14 @@ newHabitForm?.addEventListener("submit", async (event) => {
     (max, habit) => Math.max(max, parseOrder(habit.order)),
     0
   );
-  const timestamp = new Date();
   const payload = {
     name,
     type,
     unit,
     active,
     order: currentMaxOrder + 1,
-    createdAt: timestamp,
-    updatedAt: timestamp,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   };
 
   try {
@@ -1326,7 +1374,7 @@ newHabitForm?.addEventListener("submit", async (event) => {
       activeInput.checked = true;
     }
   } catch (error) {
-    console.error("Failed to add habit", error);
+    logAndToastError("Failed to add habit", error, "習慣の追加に失敗しました");
     if (habitEditorError) {
       habitEditorError.textContent = "習慣の追加に失敗しました";
     }
@@ -1366,12 +1414,16 @@ exportForm?.addEventListener("submit", async (event) => {
     toggleModal(false);
     exportForm.reset();
   } catch (error) {
-    console.error("export failed", error);
+    logAndToastError("export failed", error, "エクスポートに失敗しました");
     if (exportError) {
       exportError.textContent = "エクスポートに失敗しました";
     }
   }
 });
+
+updateConnectivityState(navigator.onLine, { silent: true });
+window.addEventListener("online", () => updateConnectivityState(true));
+window.addEventListener("offline", () => updateConnectivityState(false));
 
 refreshActiveHabitList();
 

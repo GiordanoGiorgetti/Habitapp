@@ -353,6 +353,16 @@ body {
   flex-wrap: wrap;
 }
 
+.offline-warning {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-medium);
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #b91c1c;
+  font-weight: 600;
+}
+
 .action-menu__button {
   padding: var(--space-3) var(--space-6);
   border: none;
