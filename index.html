@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>今日の振り返り</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body>
+  <h1>今日の振り返り</h1>
+
+  <!-- ログイン画面 -->
+  <section id="login-section">
+    <h2>ログイン</h2>
+    <input id="email" type="email" placeholder="メールアドレス" />
+    <input id="password" type="password" placeholder="パスワード" />
+    <button id="login-btn">ログイン</button>
+    <p id="login-error" style="color:red"></p>
+  </section>
+
+  <!-- メイン画面 -->
+  <section id="app-section" style="display:none">
+    <p id="today-label"></p>
+
+    <h2>今日のチェック</h2>
+    <label>
+      <input type="checkbox" id="training-done" />
+      トレーニング完了
+    </label><br />
+
+    <label>
+      勉強時間（分）:
+      <input type="number" id="study-minutes" min="0" />
+    </label><br />
+
+    <label>
+      メモ:<br />
+      <textarea id="memo" rows="3" cols="30"></textarea>
+    </label><br />
+
+    <button id="save-btn">保存</button>
+    <span id="save-status"></span>
+
+    <h3>日付の切り替え</h3>
+    <button id="prev-btn">前日を見る</button>
+    <button id="today-btn">今日に戻る</button>
+    <p id="viewing-date"></p>
+    <pre id="debug-output"></pre>
+
+    <button id="logout-btn">ログアウト</button>
+  </section>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
