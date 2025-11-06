@@ -4,6 +4,8 @@ import {
   collection,
   query,
   where,
+  orderBy,
+  limit,
   getDocs,
   doc,
   setDoc,
@@ -43,6 +45,225 @@ const prevBtn = document.getElementById("prev-btn");
 const todayBtn = document.getElementById("today-btn");
 const viewingDateLabel = document.getElementById("viewing-date");
 const debugOutput = document.getElementById("debug-output");
+const historyBtn = document.getElementById("history-btn");
+const historyModal = document.getElementById("history-modal");
+const historyCloseBtn = document.getElementById("history-close");
+const habitSelect = document.getElementById("habit-select");
+const historyCalendar = document.getElementById("history-calendar");
+const historyChartCanvas = document.getElementById("history-chart");
+
+const habits = [
+  {
+    id: "training",
+    label: "トレーニング完了",
+    type: "boolean",
+    path: ["training", "done"],
+    chartType: "bar",
+  },
+  {
+    id: "study",
+    label: "勉強時間（分）",
+    type: "number",
+    path: ["study", "minutes"],
+    chartType: "line",
+  },
+];
+
+let historyChart = null;
+
+function getValueByPath(data, path) {
+  return path.reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : undefined), data);
+}
+
+function createDateRange(days) {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(end.getDate() - (days - 1));
+  const range = [];
+  for (let i = 0; i < days; i += 1) {
+    const date = new Date(start);
+    date.setDate(start.getDate() + i);
+    range.push({ date, label: formatDate(date) });
+  }
+  return range;
+}
+
+async function fetchRecentEntries(days = 30) {
+  const range = createDateRange(days);
+  const startLabel = range[0]?.label;
+  if (!startLabel) {
+    return { range: [], map: new Map() };
+  }
+
+  const entriesQuery = query(
+    collection(db, "entries"),
+    orderBy("date"),
+    where("date", ">=", startLabel),
+    limit(days * 2)
+  );
+  const snapshot = await getDocs(entriesQuery);
+  const map = new Map();
+  snapshot.forEach((docSnap) => {
+    const data = docSnap.data();
+    if (data?.date) {
+      map.set(data.date, data);
+    }
+  });
+  return { range, map };
+}
+
+function formatDayDisplay(date) {
+  return date.toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" });
+}
+
+function ensureChart(habit, labels, datasetValues) {
+  if (typeof Chart === "undefined") {
+    console.warn("Chart.js が読み込まれていません");
+    return;
+  }
+  const ctx = historyChartCanvas.getContext("2d");
+  const chartType = habit.chartType;
+  const colors = {
+    border: "rgba(54, 162, 235, 1)",
+    background: habit.type === "boolean" ? "rgba(75, 192, 192, 0.7)" : "rgba(54, 162, 235, 0.4)",
+  };
+
+  if (historyChart) {
+    historyChart.destroy();
+  }
+
+  historyChart = new Chart(ctx, {
+    type: chartType,
+    data: {
+      labels,
+      datasets: [
+        {
+          label: habit.label,
+          data: datasetValues,
+          backgroundColor: colors.background,
+          borderColor: colors.border,
+          borderWidth: 2,
+          tension: 0.3,
+          fill: habit.type === "number",
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y:
+          habit.type === "boolean"
+            ? {
+                suggestedMin: 0,
+                suggestedMax: 1,
+                ticks: {
+                  stepSize: 1,
+                },
+              }
+            : {
+                beginAtZero: true,
+              },
+      },
+    },
+  });
+}
+
+function renderCalendar(habit, range, values) {
+  historyCalendar.innerHTML = "";
+  if (!range.length) {
+    const emptyMessage = document.createElement("p");
+    emptyMessage.textContent = "データがありません";
+    emptyMessage.style.gridColumn = "span 7";
+    historyCalendar.appendChild(emptyMessage);
+    return;
+  }
+  const maxValue = habit.type === "number" ? Math.max(...values.filter((v) => typeof v === "number"), 0) : 0;
+
+  range.forEach((item, index) => {
+    const cell = document.createElement("div");
+    cell.classList.add("calendar-cell");
+    const dateLabel = document.createElement("div");
+    dateLabel.className = "date-label";
+    dateLabel.textContent = formatDayDisplay(item.date);
+
+    const valueLabel = document.createElement("div");
+    valueLabel.className = "value-label";
+    const value = values[index];
+
+    if (habit.type === "boolean") {
+      if (value === 1) {
+        valueLabel.textContent = "✓";
+        cell.classList.add("boolean-true");
+      } else if (value === 0) {
+        valueLabel.textContent = "×";
+        cell.classList.add("boolean-false");
+      } else {
+        valueLabel.textContent = "–";
+      }
+    } else if (typeof value === "number") {
+      valueLabel.textContent = value;
+      const intensity = maxValue > 0 ? value / maxValue : 0;
+      const alpha = 0.15 + intensity * 0.65;
+      cell.style.backgroundColor = `rgba(54, 162, 235, ${alpha.toFixed(2)})`;
+      cell.style.color = intensity > 0.5 ? "#fff" : "#123";
+    } else {
+      valueLabel.textContent = "–";
+    }
+
+    cell.appendChild(dateLabel);
+    cell.appendChild(valueLabel);
+    historyCalendar.appendChild(cell);
+  });
+}
+
+async function updateHistoryView() {
+  const selectedId = habitSelect.value;
+  const habit = habits.find((h) => h.id === selectedId);
+  if (!habit) return;
+
+  const { range, map } = await fetchRecentEntries(30);
+  const labels = range.map((item) => formatDayDisplay(item.date));
+  const datasetValues = range.map((item) => {
+    const entry = map.get(item.label);
+    const rawValue = entry ? getValueByPath(entry, habit.path) : undefined;
+    if (habit.type === "boolean") {
+      if (rawValue === undefined || rawValue === null) {
+        return null;
+      }
+      return rawValue ? 1 : 0;
+    }
+    if (typeof rawValue === "number") {
+      return rawValue;
+    }
+    return null;
+  });
+
+  ensureChart(habit, labels, datasetValues);
+  renderCalendar(habit, range, datasetValues);
+}
+
+function openHistoryModal() {
+  historyModal.classList.add("active");
+  updateHistoryView();
+}
+
+function closeHistoryModal() {
+  historyModal.classList.remove("active");
+}
+
+function populateHabitSelect() {
+  habitSelect.innerHTML = "";
+  habits.forEach((habit) => {
+    const option = document.createElement("option");
+    option.value = habit.id;
+    option.textContent = habit.label;
+    habitSelect.appendChild(option);
+  });
+  if (habits.length > 0) {
+    habitSelect.value = habits[0].id;
+  }
+}
 
 todayLabel.textContent = `今日は ${currentViewingDate} です`;
 
@@ -105,6 +326,26 @@ todayBtn.addEventListener("click", async () => {
   const entry = await loadEntry(formatDate(today));
   showEntry(formatDate(today), entry);
 });
+
+historyBtn.addEventListener("click", () => {
+  openHistoryModal();
+});
+
+historyCloseBtn.addEventListener("click", () => {
+  closeHistoryModal();
+});
+
+historyModal.addEventListener("click", (event) => {
+  if (event.target === historyModal) {
+    closeHistoryModal();
+  }
+});
+
+habitSelect.addEventListener("change", () => {
+  updateHistoryView();
+});
+
+populateHabitSelect();
 
 // 起動時に今日のデータを読み込む
 loadEntry(currentViewingDate).then((entry) => showEntry(currentViewingDate, entry));
