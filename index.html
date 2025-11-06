@@ -23,15 +23,11 @@
       </section>
 
       <section class="card app-section habit-list-section">
-        <h2 class="section-title">習慣チェック</h2>
-        <ul class="habit-list__items">
-          <li class="habit-list__item">
-            <label class="habit-toggle">
-              <input class="habit-toggle__input" type="checkbox" id="training-done" />
-              <span class="habit-toggle__label">トレーニング完了</span>
-            </label>
-          </li>
-        </ul>
+        <div class="section-title-row">
+          <h2 class="section-title">習慣チェック</h2>
+          <button class="habit-edit-button" id="edit-habits-btn" type="button">習慣を編集</button>
+        </div>
+        <ul class="habit-list__items" id="habit-list"></ul>
       </section>
 
       <section class="card app-section diary-form-section">
@@ -83,6 +79,46 @@
         <button class="modal__submit" type="submit">CSV をダウンロード</button>
       </form>
       <p class="modal__error" id="export-error" role="alert"></p>
+    </div>
+  </div>
+
+  <div class="modal" id="habit-modal" hidden>
+    <div class="modal__overlay" data-modal-close></div>
+    <div class="modal__content" role="dialog" aria-modal="true" aria-labelledby="habit-modal-title">
+      <button class="modal__close" type="button" data-modal-close aria-label="閉じる">×</button>
+      <h2 class="modal__title" id="habit-modal-title">習慣を編集</h2>
+
+      <section class="modal__section">
+        <h3 class="modal__section-title">既存の習慣</h3>
+        <div class="habit-editor__list" id="habit-editor-list"></div>
+        <p class="habit-editor__empty" id="habit-editor-empty" hidden>習慣が登録されていません</p>
+      </section>
+
+      <section class="modal__section">
+        <h3 class="modal__section-title">新しい習慣を追加</h3>
+        <form class="habit-editor__form" id="new-habit-form">
+          <div class="habit-editor__grid">
+            <label class="field-group">
+              <span class="field-group__label">名前</span>
+              <input class="field-group__input" name="name" required />
+            </label>
+            <label class="field-group">
+              <span class="field-group__label">タイプ</span>
+              <input class="field-group__input" name="type" required />
+            </label>
+            <label class="field-group">
+              <span class="field-group__label">単位</span>
+              <input class="field-group__input" name="unit" />
+            </label>
+            <label class="habit-editor__checkbox">
+              <input type="checkbox" name="active" checked />
+              <span>アクティブにする</span>
+            </label>
+          </div>
+          <button class="modal__submit" type="submit">追加する</button>
+        </form>
+        <p class="habit-editor__error" id="habit-editor-error" role="alert"></p>
+      </section>
     </div>
   </div>
 
