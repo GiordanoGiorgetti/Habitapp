@@ -58,8 +58,23 @@ const habitEditorList = document.getElementById("habit-editor-list");
 const habitEditorEmpty = document.getElementById("habit-editor-empty");
 const newHabitForm = document.getElementById("new-habit-form");
 const habitEditorError = document.getElementById("habit-editor-error");
+const historyBtn = document.getElementById("history-btn");
+const historyModal = document.getElementById("history-modal");
+const historyHabitSelect = document.getElementById("history-habit-select");
+const historyEmptyMessage = document.getElementById("history-empty");
+const historyStatus = document.getElementById("history-status");
+const historyChartCanvas = document.getElementById("history-chart");
+const historyChartContainer = document.getElementById("history-chart-container");
+const historyChartEmpty = document.getElementById("history-chart-empty");
+const historyCalendar = document.getElementById("history-calendar");
+const historyCalendarEmpty = document.getElementById("history-calendar-empty");
 
 let habitEditorCache = [];
+let activeHabitsCache = [];
+let historyChartInstance = null;
+let recentEntriesCache = null;
+
+const HISTORY_RANGE_DAYS = 30;
 
 todayLabel.textContent = `今日は ${currentViewingDate} です`;
 
@@ -70,6 +85,10 @@ function parseOrder(order) {
 
 function sortHabitsByOrder(habits) {
   return habits.slice().sort((a, b) => parseOrder(a.order) - parseOrder(b.order));
+}
+
+function updateActiveHabitsCache(habits) {
+  activeHabitsCache = habits.filter((habit) => habit.active !== false);
 }
 
 function renderActiveHabits(habits) {
@@ -230,6 +249,7 @@ async function fetchHabits({ activeOnly = false } = {}) {
 async function refreshActiveHabitList() {
   try {
     const activeHabits = await fetchHabits({ activeOnly: true });
+    updateActiveHabitsCache(activeHabits);
     renderActiveHabits(activeHabits);
   } catch (error) {
     console.error("Failed to load active habits", error);
@@ -239,6 +259,7 @@ async function refreshActiveHabitList() {
 async function loadHabitsForEditor() {
   try {
     habitEditorCache = await fetchHabits({ activeOnly: false });
+    updateActiveHabitsCache(habitEditorCache);
     renderHabitEditorList(habitEditorCache);
   } catch (error) {
     console.error("Failed to load habits", error);
@@ -333,6 +354,430 @@ function csvEscape(value) {
     return `"${stringValue.replace(/"/g, '""')}"`;
   }
   return stringValue;
+}
+
+function buildDateRange(days, endDate = new Date()) {
+  const range = [];
+  const startDate = new Date(endDate);
+  startDate.setHours(0, 0, 0, 0);
+  startDate.setDate(startDate.getDate() - (days - 1));
+  const cursor = startDate;
+  for (let i = 0; i < days; i += 1) {
+    range.push(formatDate(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return range;
+}
+
+function getHabitMode(habit) {
+  const type = (habit?.type ?? "").toString().toLowerCase();
+  if (type.includes("bool") || type.includes("check")) {
+    return "boolean";
+  }
+  if (type.includes("number") || type.includes("num") || type.includes("count") || type.includes("time")) {
+    return "number";
+  }
+  return "number";
+}
+
+function normalizeBooleanValue(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "y", "done"].includes(normalized)) return true;
+    if (["false", "0", "no", "n", "undone"].includes(normalized)) return false;
+  }
+  return null;
+}
+
+function normalizeNumericValue(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function extractHabitValue(entry, habit) {
+  if (!entry || !habit) return null;
+  const identifiers = [habit.id, habit.name].filter((identifier) => identifier != null);
+  const candidates = [entry.habits, entry.habitRecords, entry.habitEntries, entry.habitResults];
+
+  const resolveFromCandidate = (candidate) => {
+    if (!candidate) return undefined;
+    if (Array.isArray(candidate)) {
+      return candidate.find((item) =>
+        identifiers.some((identifier) => {
+          if (identifier == null) return false;
+          const idString = identifier.toString();
+          return (
+            item?.habitId === identifier ||
+            item?.habitId === idString ||
+            item?.id === identifier ||
+            item?.id === idString ||
+            item?.name === identifier ||
+            item?.name === idString
+          );
+        })
+      );
+    }
+    if (typeof candidate === "object") {
+      for (const identifier of identifiers) {
+        if (identifier == null) continue;
+        const idString = identifier.toString();
+        if (Object.prototype.hasOwnProperty.call(candidate, identifier)) {
+          return candidate[identifier];
+        }
+        if (Object.prototype.hasOwnProperty.call(candidate, idString)) {
+          return candidate[idString];
+        }
+      }
+    }
+    return undefined;
+  };
+
+  for (const candidate of candidates) {
+    const record = resolveFromCandidate(candidate);
+    if (record !== undefined) {
+      if (record === null) return null;
+      if (typeof record === "object") {
+        if (record.value !== undefined) return record.value;
+        if (record.done !== undefined) return record.done;
+        if (record.score !== undefined) return record.score;
+      }
+      return record;
+    }
+  }
+
+  return null;
+}
+
+async function fetchRecentEntries(days = HISTORY_RANGE_DAYS) {
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(endDate.getDate() - (days - 1));
+  const start = formatDate(startDate);
+  const end = formatDate(endDate);
+  const entriesRef = collection(db, "entries");
+  const entriesQuery = query(
+    entriesRef,
+    where("date", ">=", start),
+    where("date", "<=", end),
+    orderBy("date")
+  );
+  const snap = await getDocs(entriesQuery);
+  const map = new Map();
+  snap.docs.forEach((docSnap) => {
+    const data = docSnap.data();
+    if (data?.date) {
+      map.set(data.date, { id: docSnap.id, ...data });
+    }
+  });
+  return { map, start, end };
+}
+
+function prepareHabitSeries(habit, entriesMap, dates) {
+  const mode = getHabitMode(habit);
+  const chartValues = [];
+  const rawValues = [];
+
+  dates.forEach((date) => {
+    const entry = entriesMap.get(date);
+    const value = extractHabitValue(entry, habit);
+    if (mode === "boolean") {
+      const normalized = normalizeBooleanValue(value);
+      rawValues.push(normalized);
+      chartValues.push(normalized == null ? null : normalized ? 1 : 0);
+    } else {
+      const numeric = normalizeNumericValue(value);
+      rawValues.push(numeric);
+      chartValues.push(numeric);
+    }
+  });
+
+  return { mode, chartValues, rawValues };
+}
+
+function updateHistoryStatus(message = "", state = "info") {
+  if (!historyStatus) return;
+  historyStatus.textContent = message;
+  if (message) {
+    historyStatus.dataset.state = state;
+  } else {
+    historyStatus.dataset.state = "info";
+  }
+}
+
+function renderHistoryChart(habit, dates, chartValues, rawValues, mode) {
+  if (!historyChartCanvas || typeof Chart === "undefined") {
+    return;
+  }
+
+  const hasData = chartValues.some((value) => value != null);
+  if (historyChartContainer) {
+    historyChartContainer.classList.toggle("is-hidden", !hasData);
+  }
+  if (historyChartEmpty) {
+    historyChartEmpty.hidden = hasData;
+  }
+
+  if (!hasData) {
+    if (historyChartInstance) {
+      historyChartInstance.destroy();
+      historyChartInstance = null;
+    }
+    return;
+  }
+
+  const ctx = historyChartCanvas.getContext("2d");
+  if (!ctx) return;
+
+  if (historyChartInstance) {
+    historyChartInstance.destroy();
+  }
+
+  const displayLabels = dates.map((date) => date.slice(5));
+  const chartType = mode === "boolean" ? "bar" : "line";
+  const datasetLabel = habit?.name || "選択中の習慣";
+
+  historyChartInstance = new Chart(ctx, {
+    type: chartType,
+    data: {
+      labels: displayLabels,
+      datasets: [
+        {
+          label: datasetLabel,
+          data: chartValues,
+          backgroundColor: mode === "boolean" ? "rgba(84, 104, 255, 0.5)" : "rgba(84, 104, 255, 0.25)",
+          borderColor: "#5468ff",
+          borderWidth: 2,
+          fill: mode !== "boolean",
+          tension: mode === "boolean" ? 0 : 0.35,
+          pointRadius: mode === "boolean" ? 0 : 4,
+          pointHoverRadius: mode === "boolean" ? 0 : 6,
+          spanGaps: true,
+          borderRadius: mode === "boolean" ? 6 : undefined,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          beginAtZero: true,
+          suggestedMax: mode === "boolean" ? 1 : undefined,
+          max: mode === "boolean" ? 1 : undefined,
+          ticks:
+            mode === "boolean"
+              ? {
+                  stepSize: 1,
+                  callback: (value) => (Number(value) === 1 ? "達成" : "未達"),
+                }
+              : undefined,
+        },
+      },
+      plugins: {
+        legend: {
+          display: true,
+        },
+        tooltip: {
+          callbacks: {
+            title: (context) => {
+              const index = context[0]?.dataIndex ?? 0;
+              return dates[index] ?? "";
+            },
+            label: (context) => {
+              const index = context.dataIndex ?? 0;
+              const rawValue = rawValues[index];
+              if (mode === "boolean") {
+                if (rawValue === true) return "達成";
+                if (rawValue === false) return "未達";
+                return "記録なし";
+              }
+              if (rawValue == null) {
+                return "記録なし";
+              }
+              return `${rawValue}`;
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+function renderHistoryCalendar(habit, dates, values, mode) {
+  if (!historyCalendar) return;
+  historyCalendar.innerHTML = "";
+
+  const hasData = values.some((value) => value != null);
+  historyCalendar.classList.toggle("is-hidden", !hasData);
+  if (historyCalendarEmpty) {
+    historyCalendarEmpty.hidden = hasData;
+  }
+
+  if (!hasData) {
+    return;
+  }
+
+  let maxValue = 0;
+  if (mode === "number") {
+    values.forEach((value) => {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        maxValue = Math.max(maxValue, Math.abs(value));
+      }
+    });
+  }
+
+  dates.forEach((date, index) => {
+    const cell = document.createElement("div");
+    cell.className = "history-calendar__item";
+    cell.title = `${habit?.name ?? "習慣"} - ${date}`;
+
+    const dateLabel = document.createElement("span");
+    dateLabel.className = "history-calendar__date";
+    dateLabel.textContent = date.slice(5);
+    cell.appendChild(dateLabel);
+
+    const value = values[index];
+    if (mode === "boolean") {
+      const icon = document.createElement("span");
+      icon.className = "history-calendar__icon";
+      if (value === true) {
+        icon.textContent = "✓";
+        cell.dataset.state = "true";
+      } else if (value === false) {
+        icon.textContent = "×";
+        cell.dataset.state = "false";
+      } else {
+        icon.textContent = "–";
+        cell.dataset.state = "empty";
+      }
+      cell.appendChild(icon);
+    } else {
+      const numericValue = typeof value === "number" && Number.isFinite(value) ? value : null;
+      const valueElement = document.createElement("span");
+      valueElement.className = "history-calendar__value";
+      if (numericValue == null) {
+        cell.dataset.state = "empty";
+        valueElement.textContent = "—";
+      } else {
+        cell.dataset.state = "number";
+        valueElement.textContent = Number.isInteger(numericValue)
+          ? numericValue.toString()
+          : numericValue.toFixed(1);
+        const intensity = maxValue > 0 ? Math.min(Math.abs(numericValue) / maxValue, 1) : 0.2;
+        const alpha = 0.2 + intensity * 0.6;
+        cell.style.background = `rgba(84, 104, 255, ${alpha.toFixed(3)})`;
+      }
+      cell.appendChild(valueElement);
+    }
+
+    historyCalendar.appendChild(cell);
+  });
+}
+
+function populateHistoryHabitSelect(habits) {
+  if (!historyHabitSelect) return;
+  const previousValue = historyHabitSelect.value;
+  historyHabitSelect.innerHTML = "";
+
+  if (!habits.length) {
+    historyHabitSelect.disabled = true;
+    if (historyEmptyMessage) {
+      historyEmptyMessage.hidden = false;
+    }
+    return;
+  }
+
+  historyHabitSelect.disabled = false;
+  if (historyEmptyMessage) {
+    historyEmptyMessage.hidden = true;
+  }
+
+  habits.forEach((habit) => {
+    const option = document.createElement("option");
+    option.value = habit.id;
+    option.textContent = habit.name || "(名称未設定)";
+    historyHabitSelect.appendChild(option);
+  });
+
+  if (previousValue && habits.some((habit) => habit.id === previousValue)) {
+    historyHabitSelect.value = previousValue;
+  } else if (habits.length) {
+    historyHabitSelect.value = habits[0].id;
+  }
+}
+
+function updateHistoryView() {
+  if (!historyHabitSelect) return;
+  const habitId = historyHabitSelect.value;
+  const habit = activeHabitsCache.find((item) => item.id === habitId);
+
+  if (!habit) {
+    renderHistoryChart(null, [], [], [], "number");
+    renderHistoryCalendar(null, [], [], "number");
+    return;
+  }
+
+  const entriesMap = recentEntriesCache?.map ?? new Map();
+  const dates = buildDateRange(HISTORY_RANGE_DAYS);
+  const { mode, chartValues, rawValues } = prepareHabitSeries(habit, entriesMap, dates);
+  renderHistoryChart(habit, dates, chartValues, rawValues, mode);
+  renderHistoryCalendar(habit, dates, rawValues, mode);
+}
+
+async function loadHistoryData() {
+  updateHistoryStatus("読み込み中...", "loading");
+  if (historyHabitSelect) {
+    historyHabitSelect.disabled = true;
+  }
+  try {
+    const [habits, entriesResult] = await Promise.all([
+      fetchHabits({ activeOnly: true }),
+      fetchRecentEntries(HISTORY_RANGE_DAYS),
+    ]);
+    updateActiveHabitsCache(habits);
+    populateHistoryHabitSelect(activeHabitsCache);
+    recentEntriesCache = entriesResult;
+    updateHistoryStatus("", "info");
+    updateHistoryView();
+  } catch (error) {
+    console.error("Failed to load history data", error);
+    updateHistoryStatus("履歴の読み込みに失敗しました", "error");
+    if (historyChartContainer) {
+      historyChartContainer.classList.add("is-hidden");
+    }
+    if (historyChartEmpty) {
+      historyChartEmpty.hidden = false;
+    }
+    if (historyCalendar) {
+      historyCalendar.classList.add("is-hidden");
+    }
+    if (historyCalendarEmpty) {
+      historyCalendarEmpty.hidden = false;
+    }
+  }
+}
+
+function toggleHistoryModal(show) {
+  if (!historyModal) return;
+  if (!show) {
+    if (historyChartInstance) {
+      historyChartInstance.destroy();
+      historyChartInstance = null;
+    }
+    recentEntriesCache = null;
+    updateHistoryStatus("", "info");
+  }
+  historyModal.hidden = !show;
 }
 
 async function fetchEntriesBetween(fromDate, toDate) {
@@ -460,6 +905,25 @@ habitModal?.addEventListener("click", (event) => {
   }
 });
 
+if (historyBtn && historyModal) {
+  historyBtn.addEventListener("click", async () => {
+    toggleHistoryModal(true);
+    await loadHistoryData();
+  });
+}
+
+historyModal?.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  if (target.dataset.modalClose !== undefined) {
+    toggleHistoryModal(false);
+  }
+});
+
+historyHabitSelect?.addEventListener("change", () => {
+  updateHistoryView();
+});
+
 habitEditorList?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.target;
@@ -502,7 +966,8 @@ habitEditorList?.addEventListener("submit", async (event) => {
     habitEditorCache = habitEditorCache.map((habit) =>
       habit.id === habitId ? { ...habit, ...updatePayload } : habit
     );
-    renderActiveHabits(habitEditorCache.filter((habit) => habit.active !== false));
+    updateActiveHabitsCache(habitEditorCache);
+    renderActiveHabits(activeHabitsCache);
     if (status) {
       status.textContent = "保存しました";
       setTimeout(() => {
@@ -547,7 +1012,8 @@ habitEditorList?.addEventListener("click", async (event) => {
     if (activeInput instanceof HTMLInputElement) {
       activeInput.checked = false;
     }
-    renderActiveHabits(habitEditorCache.filter((habit) => habit.active !== false));
+    updateActiveHabitsCache(habitEditorCache);
+    renderActiveHabits(activeHabitsCache);
     if (status) {
       status.textContent = "非アクティブにしました";
       setTimeout(() => {
@@ -599,7 +1065,7 @@ newHabitForm?.addEventListener("submit", async (event) => {
   try {
     await addDoc(collection(db, "habits"), payload);
     await loadHabitsForEditor();
-    renderActiveHabits(habitEditorCache.filter((habit) => habit.active !== false));
+    renderActiveHabits(activeHabitsCache);
     newHabitForm.reset();
     const activeInput = newHabitForm.querySelector('input[name="active"]');
     if (activeInput instanceof HTMLInputElement) {

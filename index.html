@@ -11,6 +11,9 @@
     <header class="header-section">
       <h1 class="app-title">今日の振り返り</h1>
       <p class="app-subtitle" id="today-label"></p>
+      <div class="header-actions">
+        <button class="header-actions__button" id="history-btn" type="button">履歴を見る</button>
+      </div>
     </header>
 
     <main class="app-main">
@@ -122,6 +125,39 @@
     </div>
   </div>
 
+  <div class="modal" id="history-modal" hidden>
+    <div class="modal__overlay" data-modal-close></div>
+    <div class="modal__content" role="dialog" aria-modal="true" aria-labelledby="history-modal-title">
+      <button class="modal__close" type="button" data-modal-close aria-label="閉じる">×</button>
+      <h2 class="modal__title" id="history-modal-title">履歴を見る</h2>
+
+      <section class="modal__section">
+        <h3 class="modal__section-title">習慣を選択</h3>
+        <label class="field-group">
+          <span class="field-group__label">習慣</span>
+          <select class="field-group__input" id="history-habit-select"></select>
+        </label>
+        <p class="history-modal__empty" id="history-empty" hidden>表示できる習慣がありません</p>
+        <p class="history-modal__status" id="history-status"></p>
+      </section>
+
+      <section class="modal__section">
+        <h3 class="modal__section-title">直近30日の推移</h3>
+        <div class="history-chart" id="history-chart-container">
+          <canvas id="history-chart" aria-describedby="history-chart-empty"></canvas>
+        </div>
+        <p class="history-chart__empty" id="history-chart-empty" hidden>グラフに表示できるデータがありません</p>
+      </section>
+
+      <section class="modal__section">
+        <h3 class="modal__section-title">カレンダー表示</h3>
+        <div class="history-calendar" id="history-calendar" aria-live="polite"></div>
+        <p class="history-calendar__empty" id="history-calendar-empty" hidden>カレンダーに表示できるデータがありません</p>
+      </section>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script type="module" src="./main.js"></script>
 </body>
 </html>
