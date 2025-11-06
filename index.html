@@ -4,6 +4,61 @@
   <meta charset="UTF-8" />
   <title>今日の振り返り</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: sans-serif;
+      line-height: 1.6;
+      padding: 16px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 12px;
+    }
+
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.45);
+      padding: 16px;
+    }
+
+    .modal.show {
+      display: flex;
+    }
+
+    .modal__content {
+      background: #fff;
+      padding: 24px;
+      max-width: 420px;
+      width: 100%;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal__actions {
+      margin-top: 16px;
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+
+    .modal__status {
+      margin-top: 12px;
+      min-height: 1.2em;
+      color: #555;
+      font-size: 0.9rem;
+    }
+  </style>
 </head>
 <body>
   <h1>今日の振り返り</h1>
@@ -13,20 +68,29 @@
   <label>
     <input type="checkbox" id="training-done" />
     トレーニング完了
-  </label><br />
+  </label>
 
   <label>
     勉強時間（分）:
     <input type="number" id="study-minutes" min="0" />
-  </label><br />
+  </label>
+
+  <label>
+    日記:<br />
+    <textarea id="diary" rows="4" cols="30"></textarea>
+  </label>
 
   <label>
     メモ:<br />
     <textarea id="memo" rows="3" cols="30"></textarea>
-  </label><br />
+  </label>
 
   <button id="save-btn">保存</button>
   <span id="save-status"></span>
+
+  <div style="margin-top: 16px;">
+    <button id="export-open-btn">CSV エクスポート</button>
+  </div>
 
   <h3>日付切り替え</h3>
   <button id="prev-btn">前日</button>
@@ -34,6 +98,28 @@
   <p id="viewing-date"></p>
 
   <pre id="debug-output"></pre>
+
+  <div id="export-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
+    <div class="modal__content">
+      <h2 id="export-modal-title">CSV エクスポート</h2>
+      <p>エクスポートする期間を指定してください。</p>
+      <form id="export-form">
+        <label>
+          From:
+          <input type="date" id="export-from" required />
+        </label>
+        <label>
+          To:
+          <input type="date" id="export-to" required />
+        </label>
+        <div class="modal__actions">
+          <button type="button" id="export-cancel-btn">キャンセル</button>
+          <button type="submit" id="export-submit-btn">エクスポート</button>
+        </div>
+        <p class="modal__status" id="export-status"></p>
+      </form>
+    </div>
+  </div>
 
   <script type="module" src="./main.js"></script>
 </body>
