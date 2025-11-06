@@ -41,6 +41,10 @@
           <input class="field-group__input" type="number" id="study-minutes" min="0" />
         </div>
         <div class="field-group">
+          <label class="field-group__label" for="diary">日記</label>
+          <textarea class="field-group__textarea" id="diary" rows="6"></textarea>
+        </div>
+        <div class="field-group">
           <label class="field-group__label" for="memo">メモ</label>
           <textarea class="field-group__textarea" id="memo" rows="4"></textarea>
         </div>
@@ -50,6 +54,7 @@
         <h2 class="section-title">アクション</h2>
         <div class="action-menu__content">
           <button class="action-menu__button" id="save-btn" type="button">保存</button>
+          <button class="action-menu__button action-menu__button--secondary" id="export-btn" type="button">エクスポート</button>
           <span class="action-menu__status" id="save-status"></span>
         </div>
       </section>
@@ -59,6 +64,26 @@
         <pre class="debug-panel__output" id="debug-output"></pre>
       </section>
     </main>
+  </div>
+
+  <div class="modal" id="export-modal" hidden>
+    <div class="modal__overlay" data-modal-close></div>
+    <div class="modal__content" role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
+      <button class="modal__close" type="button" data-modal-close aria-label="閉じる">×</button>
+      <h2 class="modal__title" id="export-modal-title">CSV エクスポート</h2>
+      <form class="modal__form" id="export-form">
+        <div class="field-group">
+          <label class="field-group__label" for="export-from">開始日</label>
+          <input class="field-group__input" id="export-from" type="date" required />
+        </div>
+        <div class="field-group">
+          <label class="field-group__label" for="export-to">終了日</label>
+          <input class="field-group__input" id="export-to" type="date" required />
+        </div>
+        <button class="modal__submit" type="submit">CSV をダウンロード</button>
+      </form>
+      <p class="modal__error" id="export-error" role="alert"></p>
+    </div>
   </div>
 
   <script type="module" src="./main.js"></script>
