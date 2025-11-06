@@ -239,6 +239,41 @@ body {
   font-weight: 600;
 }
 
+.habit-number {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-medium);
+  background: rgba(84, 104, 255, 0.08);
+}
+
+.habit-number__label {
+  font-weight: 600;
+}
+
+.habit-number__control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.habit-number__input {
+  width: 120px;
+  max-width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid rgba(15, 23, 42, 0.16);
+  border-radius: var(--radius-small);
+  font-size: 1rem;
+  background: #fff;
+  color: inherit;
+}
+
+.habit-number__unit {
+  color: var(--color-muted);
+  font-size: 0.95rem;
+}
+
 .is-hidden {
   display: none !important;
 }
