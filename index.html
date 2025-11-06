@@ -6,15 +6,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
+<body class="app-body">
   <div class="app-shell">
-    <header class="app-header">
+    <header class="header-section">
       <h1 class="app-title">今日の振り返り</h1>
       <p class="app-subtitle" id="today-label"></p>
     </header>
 
     <main class="app-main">
-      <section class="card date-navigation">
+      <section class="card app-section date-navigation-section">
         <div class="date-navigation__controls">
           <button class="date-navigation__button" id="prev-btn" type="button">前日</button>
           <button class="date-navigation__button date-navigation__button--primary" id="today-btn" type="button">今日</button>
@@ -22,7 +22,7 @@
         <p class="date-navigation__current" id="viewing-date"></p>
       </section>
 
-      <section class="card habit-list">
+      <section class="card app-section habit-list-section">
         <h2 class="section-title">習慣チェック</h2>
         <ul class="habit-list__items">
           <li class="habit-list__item">
@@ -34,7 +34,7 @@
         </ul>
       </section>
 
-      <section class="card diary-form">
+      <section class="card app-section diary-form-section">
         <h2 class="section-title">日記フォーム</h2>
         <div class="field-group">
           <label class="field-group__label" for="study-minutes">勉強時間（分）</label>
@@ -46,7 +46,7 @@
         </div>
       </section>
 
-      <section class="card action-menu">
+      <section class="card app-section action-menu-section">
         <h2 class="section-title">アクション</h2>
         <div class="action-menu__content">
           <button class="action-menu__button" id="save-btn" type="button">保存</button>
