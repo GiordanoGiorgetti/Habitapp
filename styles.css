@@ -6,9 +6,11 @@
   --color-accent: #ff9f68;
   --color-text: #1f2933;
   --color-muted: #64748b;
+  --color-border: rgba(15, 23, 42, 0.08);
   --shadow-soft: 0 12px 24px rgba(15, 23, 42, 0.08);
   --radius-large: 18px;
   --radius-medium: 12px;
+  --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
   --space-4: 1rem;
@@ -16,6 +18,8 @@
   --space-8: 2rem;
   --font-base: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
   --font-heading: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-size-base: 16px;
+  --line-height-base: 1.6;
 }
 
 * {
@@ -24,8 +28,13 @@
 
 body {
   margin: 0;
+}
+
+.app-body {
   min-height: 100vh;
   font-family: var(--font-base);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
   background: linear-gradient(160deg, var(--color-background), #e8ecf9);
   color: var(--color-text);
 }
@@ -39,7 +48,7 @@ body {
   gap: var(--space-6);
 }
 
-.app-header {
+.header-section {
   padding: var(--space-6);
   border-radius: var(--radius-large);
   background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7));
@@ -80,9 +89,13 @@ body {
   color: var(--color-primary);
 }
 
-.date-navigation {
+.app-section {
   display: flex;
   flex-direction: column;
+  gap: var(--space-4);
+}
+
+.date-navigation-section {
   gap: var(--space-4);
 }
 
@@ -173,7 +186,7 @@ body {
   width: 100%;
   padding: var(--space-3);
   border-radius: var(--radius-medium);
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border: 1px solid var(--color-border);
   background: rgba(248, 250, 255, 0.9);
   font-size: 1rem;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -186,7 +199,7 @@ body {
   outline: none;
 }
 
-.action-menu__content {
+.action-menu-section .action-menu__content {
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -210,7 +223,7 @@ body {
   box-shadow: 0 10px 20px rgba(84, 104, 255, 0.24);
 }
 
-.action-menu__status {
+.action-menu-section .action-menu__status {
   color: var(--color-accent);
   font-weight: 600;
 }
@@ -241,7 +254,7 @@ body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .diary-form,
+  .diary-form-section,
   .debug-panel {
     grid-column: span 2;
   }
@@ -256,7 +269,7 @@ body {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .diary-form {
+  .diary-form-section {
     grid-column: span 2;
   }
 
