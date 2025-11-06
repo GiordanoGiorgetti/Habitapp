@@ -11,7 +11,17 @@ import {
   setDoc,
   addDoc,
   serverTimestamp,
+  deleteField,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+const REQUIRED_FIREBASE_CONFIG_KEYS = [
+  "apiKey",
+  "authDomain",
+  "projectId",
+  "storageBucket",
+  "messagingSenderId",
+  "appId",
+];
 
 const firebaseConfig = {
   apiKey: "AIzaSyCMJft6BfWUx8FSEt76O4iaCE13axt0dzY",
@@ -19,7 +29,7 @@ const firebaseConfig = {
   projectId: "habit-9e26c",
   storageBucket: "habit-9e26c.firebasestorage.app",
   messagingSenderId: "536564377863",
-  appId: "1:536564377863:web:c2d91a99d7e0f0369abda2"
+  appId: "1:536564377863:web:c2d91a99d7e0f0369abda2",
 };
 
 function validateFirebaseConfig(config) {
@@ -75,14 +85,6 @@ function validateFirebaseConfig(config) {
 }
 
 // 🔧 自分の firebaseConfig を貼る
-const firebaseConfig = {
-  apiKey: "AIzaSyCMJft6BfWUx8FSEt76O4iaCE13axt0dzY",
-  authDomain: "habit-9e26c.firebaseapp.com",
-  projectId: "habit-9e26c",
-  storageBucket: "habit-9e26c.firebasestorage.app",
-  messagingSenderId: "536564377863",
-  appId: "1:536564377863:web:c2d91a99d7e0f0369abda2"
-};
 
 const firebaseDiagnostics = validateFirebaseConfig(firebaseConfig);
 if (typeof document !== "undefined" && document.documentElement) {
@@ -148,7 +150,6 @@ today.setHours(0, 0, 0, 0);
 let currentViewingDate = formatDate(today);
 
 const todayLabel = document.getElementById("today-label");
-const studyMinutesInput = document.getElementById("study-minutes");
 const diaryInput = document.getElementById("diary");
 const memoInput = document.getElementById("memo");
 const saveBtn = document.getElementById("save-btn");
@@ -653,14 +654,6 @@ async function saveEntry(dateStr) {
   });
   const docId = `entry_${dateStr}`;
   const entryRef = doc(db, "entries", docId);
-  const rawStudyInput = studyMinutesInput ? studyMinutesInput.value.trim() : "";
-  let studyMinutes = null;
-  if (rawStudyInput !== "") {
-    const parsedStudy = Number(rawStudyInput);
-    if (Number.isFinite(parsedStudy) && parsedStudy >= 0) {
-      studyMinutes = parsedStudy;
-    }
-  }
   const payload = {
     date: dateStr,
     diary: diaryInput.value || "",
@@ -668,7 +661,7 @@ async function saveEntry(dateStr) {
     values,
     updatedAt: serverTimestamp(),
   };
-  payload.study = studyMinutes != null ? { minutes: studyMinutes } : null;
+  payload.study = deleteField();
   if (!currentEntryData?.id) {
     payload.createdAt = serverTimestamp();
   }
@@ -695,9 +688,6 @@ function showEntry(dateStr, entry) {
 
   if (!entry) {
     currentEntryData = null;
-    if (studyMinutesInput) {
-      studyMinutesInput.value = "";
-    }
     if (diaryInput) {
       diaryInput.value = "";
     }
@@ -710,20 +700,21 @@ function showEntry(dateStr, entry) {
     habitInputState = {};
     updateHabitInputsFromState();
   } else {
-    currentEntryData = entry;
-    if (studyMinutesInput) {
-      studyMinutesInput.value = entry.study?.minutes ?? "";
+    const sanitizedEntry = { ...entry };
+    if ("study" in sanitizedEntry) {
+      delete sanitizedEntry.study;
     }
+    currentEntryData = sanitizedEntry;
     if (diaryInput) {
-      diaryInput.value = entry.diary ?? "";
+      diaryInput.value = sanitizedEntry.diary ?? "";
     }
     if (memoInput) {
-      memoInput.value = entry.memo ?? "";
+      memoInput.value = sanitizedEntry.memo ?? "";
     }
     if (debugOutput) {
-      debugOutput.textContent = JSON.stringify(entry, null, 2);
+      debugOutput.textContent = JSON.stringify(sanitizedEntry, null, 2);
     }
-    setHabitInputStateFromEntry(entry);
+    setHabitInputStateFromEntry(sanitizedEntry);
     updateHabitInputsFromState();
   }
 }
@@ -753,6 +744,9 @@ saveBtn?.addEventListener("click", async () => {
   try {
     const saved = await saveEntry(currentViewingDate);
     const merged = currentEntryData ? { ...currentEntryData, ...saved } : saved;
+    if (merged && typeof merged === "object" && "study" in merged) {
+      delete merged.study;
+    }
     currentEntryData = merged;
     if (debugOutput) {
       debugOutput.textContent = JSON.stringify(merged, null, 2);
