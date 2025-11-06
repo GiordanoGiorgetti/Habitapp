@@ -1,8 +1,53 @@
+# Habitapp
+
+Firebase Firestore を利用して習慣の記録・振り返り・可視化を行うシンプルな Web アプリです。npm を使わない静的構成で動作し、GitHub Pages などの静的ホスティングにそのまま配置できます。
+
+## セットアップ
+1. Firebase プロジェクトを作成し、Firestore を有効にします。
+2. Firebase コンソールから Web アプリを追加し、表示される構成 (`firebaseConfig`) を `main.js` 内に貼り付けます。
+3. ローカルで動作確認する場合は `index.html` をブラウザで直接開くだけで OK です (ローカル HTTP サーバーも不要)。
+
+`firebaseConfig` は以下のような形です。
+
+```js
 const firebaseConfig = {
-  apiKey: "AIzaSyCMJft6BfWUx8FSEt76O4iaCE13axt0dzY",
-  authDomain: "habit-9e26c.firebaseapp.com",
-  projectId: "habit-9e26c",
-  storageBucket: "habit-9e26c.firebasestorage.app",
-  messagingSenderId: "536564377863",
-  appId: "1:536564377863:web:c2d91a99d7e0f0369abda2"
+  apiKey: "...",
+  authDomain: "...",
+  projectId: "...",
+  storageBucket: "...",
+  messagingSenderId: "...",
+  appId: "..."
 };
+```
+
+ページ下部の「Firebase 設定の読み込み状況」で、現在アクセスしている URL と `firebaseConfig.authDomain` の一致状況を確認できます。開発・本番 (GitHub Pages など) の両方で `firebaseConfig` が期待通り読み込まれているか確認してください。
+
+## 使い方
+### 1. 習慣を追加する
+- 「習慣名」欄に任意の名前を入力し「追加」ボタンを押すと、新しい習慣が Firestore の `habits` コレクションに保存されます。
+- 追加された習慣は当日のチェックリストに即座に反映され、以降すべての日付で利用できます。
+
+### 2. 日々の記録をつける
+- チェックボックスで習慣の達成状況を入力し、学習時間とメモを必要に応じて入力します。
+- 「保存」ボタンを押すと、選択中の日付の記録が `entries` コレクションに保存されます。
+- 「前日」「今日」ボタンで日付を切り替えながら過去の記録を参照・更新できます。
+
+### 3. データをエクスポートする
+- 「JSON をエクスポート」ボタンを押すと、`entries` コレクション全体を JSON 形式でダウンロードできます。
+- エクスポートファイルには各日の習慣の達成状況・学習時間・メモが含まれるので、バックアップや他ツールでの分析に活用できます。
+
+### 4. 記録を可視化する
+- 画面下部のグラフには、日付ごとの学習時間 (棒グラフ) と習慣達成率 (折れ線) が表示されます。
+- グラフは Firestore の記録内容に応じて自動更新されるため、保存直後に最新の状況が反映されます。
+
+## デプロイ手順のヒント
+1. このリポジトリ (またはビルド済みの `index.html` / `main.js`) を GitHub のリポジトリに配置します。
+2. GitHub Pages を有効化し、`main` ブランチ (もしくは `docs/` ディレクトリ) を公開対象に設定します。
+3. デプロイ完了後、以下の主要機能を手動で確認してください。
+   - 記録の保存と再読込
+   - 日付の切り替え
+   - JSON エクスポート
+   - グラフの表示
+4. 問題があればブラウザの開発者ツールでコンソールログを確認し、Firestore や `firebaseConfig` の設定を見直してください。
+
+GitHub Pages などの静的ホスティングに配置した場合も npm なしでそのまま動作します。
