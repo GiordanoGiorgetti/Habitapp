@@ -13,14 +13,14 @@ import {
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyCMJft6BfWUx8FSEt76O4iaCE13axt0dzY",
-  authDomain: "habit-9e26c.firebaseapp.com",
-  projectId: "habit-9e26c",
-  storageBucket: "habit-9e26c.firebasestorage.app",
-  messagingSenderId: "536564377863",
-  appId: "1:536564377863:web:c2d91a99d7e0f0369abda2"
-};
+const REQUIRED_FIREBASE_CONFIG_KEYS = [
+  "apiKey",
+  "authDomain",
+  "projectId",
+  "storageBucket",
+  "messagingSenderId",
+  "appId",
+];
 
 function validateFirebaseConfig(config) {
   const missingKeys = REQUIRED_FIREBASE_CONFIG_KEYS.filter((key) => {
@@ -100,7 +100,51 @@ function formatDate(d) {
   return `${y}-${m}-${day}`;
 }
 
+function parseISODate(dateStr) {
+  if (typeof dateStr !== "string") {
+    return null;
+  }
+  const parts = dateStr.split("-");
+  if (parts.length !== 3) {
+    return null;
+  }
+  const [yearPart, monthPart, dayPart] = parts;
+  const year = Number.parseInt(yearPart, 10);
+  const month = Number.parseInt(monthPart, 10);
+  const day = Number.parseInt(dayPart, 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return null;
+  }
+  const date = new Date(year, month - 1, day);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+const DISPLAY_DATE_FORMATTER = new Intl.DateTimeFormat("ja-JP", {
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+});
+const WEEKDAY_FORMATTER = new Intl.DateTimeFormat("ja-JP", { weekday: "short" });
+
+function formatDisplayDate(input) {
+  let date = null;
+  if (input instanceof Date) {
+    date = new Date(input.getTime());
+  } else if (typeof input === "string") {
+    date = parseISODate(input);
+  }
+  if (!date) {
+    return typeof input === "string" ? input : "";
+  }
+  return `${DISPLAY_DATE_FORMATTER.format(date)}（${WEEKDAY_FORMATTER.format(date)}）`;
+}
+
 const today = new Date();
+today.setHours(0, 0, 0, 0);
 let currentViewingDate = formatDate(today);
 
 const todayLabel = document.getElementById("today-label");
@@ -162,7 +206,9 @@ let toastRemoveTimer = null;
 
 const HISTORY_RANGE_DAYS = 30;
 
-todayLabel.textContent = `今日は ${formatDate(today)} です`;
+if (todayLabel) {
+  todayLabel.textContent = `今日は ${formatDisplayDate(today)} です`;
+}
 
 function parseOrder(order) {
   const value = Number(order);
@@ -607,14 +653,22 @@ async function saveEntry(dateStr) {
   });
   const docId = `entry_${dateStr}`;
   const entryRef = doc(db, "entries", docId);
+  const rawStudyInput = studyMinutesInput ? studyMinutesInput.value.trim() : "";
+  let studyMinutes = null;
+  if (rawStudyInput !== "") {
+    const parsedStudy = Number(rawStudyInput);
+    if (Number.isFinite(parsedStudy) && parsedStudy >= 0) {
+      studyMinutes = parsedStudy;
+    }
+  }
   const payload = {
     date: dateStr,
-    study: { minutes: Number(studyMinutesInput.value || 0) },
     diary: diaryInput.value || "",
     memo: memoInput.value || "",
     values,
     updatedAt: serverTimestamp(),
   };
+  payload.study = studyMinutes != null ? { minutes: studyMinutes } : null;
   if (!currentEntryData?.id) {
     payload.createdAt = serverTimestamp();
   }
@@ -628,8 +682,9 @@ async function saveEntry(dateStr) {
 
 function showEntry(dateStr, entry) {
   currentViewingDate = dateStr;
+  const displayDate = formatDisplayDate(dateStr);
   if (viewingDateLabel) {
-    viewingDateLabel.textContent = `表示中の日付: ${dateStr}`;
+    viewingDateLabel.textContent = `表示中の日付: ${displayDate}`;
   }
   if (datePicker) {
     datePicker.value = dateStr;
@@ -640,18 +695,34 @@ function showEntry(dateStr, entry) {
 
   if (!entry) {
     currentEntryData = null;
-    studyMinutesInput.value = "";
-    diaryInput.value = "";
-    memoInput.value = "";
-    debugOutput.textContent = "(データなし)";
+    if (studyMinutesInput) {
+      studyMinutesInput.value = "";
+    }
+    if (diaryInput) {
+      diaryInput.value = "";
+    }
+    if (memoInput) {
+      memoInput.value = "";
+    }
+    if (debugOutput) {
+      debugOutput.textContent = "(データなし)";
+    }
     habitInputState = {};
     updateHabitInputsFromState();
   } else {
     currentEntryData = entry;
-    studyMinutesInput.value = entry.study?.minutes ?? "";
-    diaryInput.value = entry.diary ?? "";
-    memoInput.value = entry.memo ?? "";
-    debugOutput.textContent = JSON.stringify(entry, null, 2);
+    if (studyMinutesInput) {
+      studyMinutesInput.value = entry.study?.minutes ?? "";
+    }
+    if (diaryInput) {
+      diaryInput.value = entry.diary ?? "";
+    }
+    if (memoInput) {
+      memoInput.value = entry.memo ?? "";
+    }
+    if (debugOutput) {
+      debugOutput.textContent = JSON.stringify(entry, null, 2);
+    }
     setHabitInputStateFromEntry(entry);
     updateHabitInputsFromState();
   }
@@ -683,7 +754,9 @@ saveBtn?.addEventListener("click", async () => {
     const saved = await saveEntry(currentViewingDate);
     const merged = currentEntryData ? { ...currentEntryData, ...saved } : saved;
     currentEntryData = merged;
-    debugOutput.textContent = JSON.stringify(merged, null, 2);
+    if (debugOutput) {
+      debugOutput.textContent = JSON.stringify(merged, null, 2);
+    }
     setHabitInputStateFromEntry(merged);
     updateHabitInputsFromState();
     if (saveStatus) {
@@ -704,19 +777,23 @@ saveBtn?.addEventListener("click", async () => {
 });
 
 prevBtn?.addEventListener("click", async () => {
-  const d = new Date(currentViewingDate);
-  d.setDate(d.getDate() - 1);
-  await changeViewingDate(formatDate(d));
+  const baseDate = parseISODate(currentViewingDate);
+  if (!baseDate) return;
+  baseDate.setDate(baseDate.getDate() - 1);
+  await changeViewingDate(formatDate(baseDate));
 });
 
 nextBtn?.addEventListener("click", async () => {
-  const d = new Date(currentViewingDate);
-  d.setDate(d.getDate() + 1);
-  await changeViewingDate(formatDate(d));
+  const baseDate = parseISODate(currentViewingDate);
+  if (!baseDate) return;
+  baseDate.setDate(baseDate.getDate() + 1);
+  await changeViewingDate(formatDate(baseDate));
 });
 
 todayBtn?.addEventListener("click", async () => {
-  await changeViewingDate(formatDate(today));
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  await changeViewingDate(formatDate(now));
 });
 
 datePicker?.addEventListener("change", async (event) => {
