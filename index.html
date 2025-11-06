@@ -10,23 +10,12 @@
 
   <p id="today-label"></p>
 
-  <label>
-    <input type="checkbox" id="training-done" />
-    トレーニング完了
-  </label><br />
-
-  <label>
-    勉強時間（分）:
-    <input type="number" id="study-minutes" min="0" />
-  </label><br />
-
-  <label>
-    メモ:<br />
-    <textarea id="memo" rows="3" cols="30"></textarea>
-  </label><br />
+  <div id="habit-list"></div>
 
   <button id="save-btn">保存</button>
   <span id="save-status"></span>
+
+  <button id="export-btn">CSV エクスポート</button>
 
   <h3>日付切り替え</h3>
   <button id="prev-btn">前日</button>
