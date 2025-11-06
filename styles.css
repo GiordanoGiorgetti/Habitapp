@@ -146,6 +146,14 @@ body {
   gap: var(--space-3);
 }
 
+.habit-list__item--empty {
+  padding: var(--space-4);
+  border-radius: var(--radius-medium);
+  background: rgba(100, 116, 139, 0.12);
+  color: var(--color-muted);
+  font-style: italic;
+}
+
 .habit-toggle {
   display: flex;
   align-items: center;
@@ -280,6 +288,135 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+#habit-modal .modal__content {
+  width: min(90vw, 640px);
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.section-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.habit-edit-button {
+  padding: var(--space-2) var(--space-3);
+  border-radius: 999px;
+  border: 1px solid rgba(84, 104, 255, 0.4);
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.habit-edit-button:hover {
+  background: rgba(84, 104, 255, 0.1);
+}
+
+.modal__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.modal__section-title {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--color-primary);
+}
+
+.habit-editor__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: var(--space-1);
+}
+
+.habit-editor__item {
+  padding: var(--space-4);
+  border: 1px solid rgba(84, 104, 255, 0.2);
+  border-radius: var(--radius-medium);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.habit-editor__grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.habit-editor__checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-medium);
+  border: 1px solid var(--color-border);
+}
+
+.habit-editor__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.habit-editor__save,
+.habit-editor__delete {
+  padding: var(--space-2) var(--space-4);
+  border-radius: 999px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.habit-editor__save {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-strong));
+  color: #fff;
+}
+
+.habit-editor__delete {
+  background: rgba(241, 70, 104, 0.12);
+  color: #d14343;
+}
+
+.habit-editor__status {
+  min-height: 1.2em;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.habit-editor__empty {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.habit-editor__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.habit-editor__grid .field-group {
+  margin-bottom: 0;
+}
+
+.habit-editor__error {
+  margin: 0;
+  color: #d14343;
+  min-height: 1.2em;
+}
+
+.habit-editor__checkbox input[type="checkbox"] {
+  accent-color: var(--color-primary);
 }
 
 .modal__title {
