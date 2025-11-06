@@ -8,46 +8,32 @@
 <body>
   <h1>今日の振り返り</h1>
 
-  <!-- ログイン画面 -->
-  <section id="login-section">
-    <h2>ログイン</h2>
-    <input id="email" type="email" placeholder="メールアドレス" />
-    <input id="password" type="password" placeholder="パスワード" />
-    <button id="login-btn">ログイン</button>
-    <p id="login-error" style="color:red"></p>
-  </section>
+  <p id="today-label"></p>
 
-  <!-- メイン画面 -->
-  <section id="app-section" style="display:none">
-    <p id="today-label"></p>
+  <label>
+    <input type="checkbox" id="training-done" />
+    トレーニング完了
+  </label><br />
 
-    <h2>今日のチェック</h2>
-    <label>
-      <input type="checkbox" id="training-done" />
-      トレーニング完了
-    </label><br />
+  <label>
+    勉強時間（分）:
+    <input type="number" id="study-minutes" min="0" />
+  </label><br />
 
-    <label>
-      勉強時間（分）:
-      <input type="number" id="study-minutes" min="0" />
-    </label><br />
+  <label>
+    メモ:<br />
+    <textarea id="memo" rows="3" cols="30"></textarea>
+  </label><br />
 
-    <label>
-      メモ:<br />
-      <textarea id="memo" rows="3" cols="30"></textarea>
-    </label><br />
+  <button id="save-btn">保存</button>
+  <span id="save-status"></span>
 
-    <button id="save-btn">保存</button>
-    <span id="save-status"></span>
+  <h3>日付切り替え</h3>
+  <button id="prev-btn">前日</button>
+  <button id="today-btn">今日</button>
+  <p id="viewing-date"></p>
 
-    <h3>日付の切り替え</h3>
-    <button id="prev-btn">前日を見る</button>
-    <button id="today-btn">今日に戻る</button>
-    <p id="viewing-date"></p>
-    <pre id="debug-output"></pre>
-
-    <button id="logout-btn">ログアウト</button>
-  </section>
+  <pre id="debug-output"></pre>
 
   <script type="module" src="./main.js"></script>
 </body>
