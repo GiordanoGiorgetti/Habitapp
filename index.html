@@ -4,9 +4,60 @@
   <meta charset="UTF-8" />
   <title>今日の振り返り</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      margin: 16px;
+    }
+
+    #network-warning {
+      display: none;
+      background-color: #fef3c7;
+      border: 1px solid #f59e0b;
+      color: #92400e;
+      padding: 8px 12px;
+      margin-bottom: 12px;
+      border-radius: 4px;
+    }
+
+    #toast {
+      position: fixed;
+      inset: auto 16px 16px auto;
+      min-width: 200px;
+      padding: 12px 16px;
+      border-radius: 4px;
+      color: #fff;
+      background-color: rgba(55, 65, 81, 0.9);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease-in-out;
+    }
+
+    #toast.visible {
+      opacity: 1;
+    }
+
+    #toast[data-type="error"] {
+      background-color: rgba(220, 38, 38, 0.9);
+    }
+
+    #toast[data-type="success"] {
+      background-color: rgba(16, 185, 129, 0.9);
+    }
+
+    #toast[data-type="info"] {
+      background-color: rgba(59, 130, 246, 0.9);
+    }
+  </style>
 </head>
 <body>
   <h1>今日の振り返り</h1>
+
+  <div
+    id="network-warning"
+    role="alert"
+    aria-hidden="true"
+  >現在オフラインです。接続が回復すると再度同期できます。</div>
 
   <p id="today-label"></p>
 
@@ -34,6 +85,8 @@
   <p id="viewing-date"></p>
 
   <pre id="debug-output"></pre>
+
+  <div id="toast" role="status" aria-live="polite"></div>
 
   <script type="module" src="./main.js"></script>
 </body>

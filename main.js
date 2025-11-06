@@ -1,11 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
   getFirestore,
-  collection,
-  query,
-  where,
-  getDocs,
   doc,
+  getDoc,
+  serverTimestamp,
   setDoc,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
@@ -39,6 +37,8 @@ const studyMinutesInput = document.getElementById("study-minutes");
 const memoInput = document.getElementById("memo");
 const saveBtn = document.getElementById("save-btn");
 const saveStatus = document.getElementById("save-status");
+const toast = document.getElementById("toast");
+const networkWarning = document.getElementById("network-warning");
 const prevBtn = document.getElementById("prev-btn");
 const todayBtn = document.getElementById("today-btn");
 const viewingDateLabel = document.getElementById("viewing-date");
@@ -46,27 +46,75 @@ const debugOutput = document.getElementById("debug-output");
 
 todayLabel.textContent = `今日は ${currentViewingDate} です`;
 
+function showToast(message, type = "info") {
+  if (!toast) return;
+  toast.textContent = message;
+  toast.dataset.type = type;
+  toast.classList.add("visible");
+  clearTimeout(showToast.timeoutId);
+  showToast.timeoutId = setTimeout(() => {
+    toast.classList.remove("visible");
+  }, 3000);
+}
+
 async function loadEntry(dateStr) {
-  const q = query(collection(db, "entries"), where("date", "==", dateStr));
-  const snap = await getDocs(q);
-  if (snap.empty) return null;
-  let data = null;
-  snap.forEach((docSnap) => (data = { id: docSnap.id, ...docSnap.data() }));
-  return data;
+  const docRef = doc(db, "entries", `entry_${dateStr}`);
+  const snap = await getDoc(docRef);
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() };
 }
 
 async function saveEntry(dateStr) {
+  const docId = `entry_${dateStr}`;
+  const docRef = doc(db, "entries", docId);
+  let shouldSetCreatedAt = false;
+  const existing = await getDoc(docRef);
+  if (!existing.exists()) {
+    shouldSetCreatedAt = true;
+  }
+
   const data = {
     date: dateStr,
     training: { done: trainingDoneInput.checked },
     study: { minutes: Number(studyMinutesInput.value || 0) },
     memo: memoInput.value || "",
-    updatedAt: new Date(),
+    updatedAt: serverTimestamp(),
   };
-  const docId = `entry_${dateStr}`;
-  await setDoc(doc(db, "entries", docId), data, { merge: true });
+
+  if (shouldSetCreatedAt) {
+    data.createdAt = serverTimestamp();
+  }
+
+  await setDoc(docRef, data, { merge: true });
   return data;
 }
+
+function updateNetworkWarning() {
+  if (!networkWarning) return;
+  if (navigator.onLine) {
+    networkWarning.style.display = "none";
+    networkWarning.setAttribute("aria-hidden", "true");
+  } else {
+    networkWarning.style.display = "block";
+    networkWarning.setAttribute("aria-hidden", "false");
+  }
+}
+
+window.addEventListener("online", () => {
+  updateNetworkWarning();
+  showToast("オンラインに復帰しました。", "info");
+  loadEntry(currentViewingDate)
+    .then((entry) => showEntry(currentViewingDate, entry))
+    .catch((error) => {
+      console.error("Failed to reload entry after reconnect", error);
+      showToast("データの読み込みに失敗しました。", "error");
+    });
+});
+
+window.addEventListener("offline", () => {
+  updateNetworkWarning();
+  showToast("現在オフラインです。", "error");
+});
 
 function showEntry(dateStr, entry) {
   currentViewingDate = dateStr;
@@ -86,25 +134,61 @@ function showEntry(dateStr, entry) {
 }
 
 saveBtn.addEventListener("click", async () => {
+  if (!navigator.onLine) {
+    showToast("オフラインのため保存できません。接続後に再試行してください。", "error");
+    saveStatus.textContent = "保存に失敗しました";
+    return;
+  }
+
   saveStatus.textContent = "保存中...";
-  const data = await saveEntry(currentViewingDate);
-  saveStatus.textContent = "保存しました";
-  debugOutput.textContent = JSON.stringify(data, null, 2);
-  setTimeout(() => (saveStatus.textContent = ""), 1500);
+  try {
+    const data = await saveEntry(currentViewingDate);
+    saveStatus.textContent = "保存しました";
+    debugOutput.textContent = JSON.stringify(data, null, 2);
+    showToast("保存しました", "success");
+    setTimeout(() => (saveStatus.textContent = ""), 1500);
+  } catch (error) {
+    console.error("Failed to save entry", error);
+    saveStatus.textContent = "保存に失敗しました";
+    showToast("データの保存に失敗しました。", "error");
+  }
 });
 
 prevBtn.addEventListener("click", async () => {
   const d = new Date(currentViewingDate);
   d.setDate(d.getDate() - 1);
   const dateStr = formatDate(d);
-  const entry = await loadEntry(dateStr);
-  showEntry(dateStr, entry);
+  try {
+    const entry = await loadEntry(dateStr);
+    showEntry(dateStr, entry);
+  } catch (error) {
+    console.error("Failed to load previous entry", error);
+    showToast("データの読み込みに失敗しました。", "error");
+  }
 });
 
 todayBtn.addEventListener("click", async () => {
-  const entry = await loadEntry(formatDate(today));
-  showEntry(formatDate(today), entry);
+  try {
+    const entry = await loadEntry(formatDate(today));
+    showEntry(formatDate(today), entry);
+  } catch (error) {
+    console.error("Failed to load today's entry", error);
+    showToast("データの読み込みに失敗しました。", "error");
+  }
 });
 
-// 起動時に今日のデータを読み込む
-loadEntry(currentViewingDate).then((entry) => showEntry(currentViewingDate, entry));
+async function init() {
+  updateNetworkWarning();
+  if (!navigator.onLine) {
+    showToast("現在オフラインです。", "error");
+  }
+  try {
+    const entry = await loadEntry(currentViewingDate);
+    showEntry(currentViewingDate, entry);
+  } catch (error) {
+    console.error("Failed to load initial entry", error);
+    showToast("データの読み込みに失敗しました。", "error");
+  }
+}
+
+init();
