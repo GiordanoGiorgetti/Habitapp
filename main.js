@@ -13,15 +13,81 @@ import {
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
+const REQUIRED_FIREBASE_CONFIG_KEYS = [
+  "apiKey",
+  "authDomain",
+  "projectId",
+  "storageBucket",
+  "messagingSenderId",
+  "appId",
+];
+
+function validateFirebaseConfig(config) {
+  const missingKeys = REQUIRED_FIREBASE_CONFIG_KEYS.filter((key) => {
+    const value = config?.[key];
+    return value === undefined || value === null || value === "";
+  });
+
+  if (missingKeys.length) {
+    const message = `[Firebase] firebaseConfig is missing required keys: ${missingKeys.join(", ")}`;
+    console.error(message);
+    throw new Error(message);
+  }
+
+  const hasWindow = typeof window !== "undefined";
+  const hostname = hasWindow ? window.location.hostname : "";
+  const environment = hostname === "localhost" ? "development" : "production";
+  const origin = hasWindow ? window.location.origin : "";
+
+  const diagnostics = {
+    environment,
+    origin,
+    authDomain: config.authDomain ?? "",
+    projectId: config.projectId ?? "",
+    matchesAuthDomainProject:
+      typeof config.authDomain === "string" && typeof config.projectId === "string"
+        ? config.authDomain.toLowerCase().includes(config.projectId.toLowerCase())
+        : false,
+  };
+
+  if (!diagnostics.matchesAuthDomainProject) {
+    console.warn(
+      `[Firebase] authDomain (${diagnostics.authDomain}) does not appear to include projectId (${diagnostics.projectId}).`
+    );
+  }
+
+  if (hasWindow) {
+    window.__FIREBASE_CONFIG_DIAGNOSTICS__ = diagnostics;
+  }
+
+  const canGroup = typeof console.groupCollapsed === "function" && typeof console.groupEnd === "function";
+  if (canGroup) {
+    console.groupCollapsed(`[Firebase] Config loaded (${diagnostics.environment})`);
+  }
+  console.info("origin:", diagnostics.origin);
+  console.info("authDomain:", diagnostics.authDomain);
+  console.info("projectId:", diagnostics.projectId);
+  if (canGroup) {
+    console.groupEnd();
+  }
+
+  return diagnostics;
+}
+
 // 🔧 自分の firebaseConfig を貼る
 const firebaseConfig = {
-  apiKey: "AIzaSyCMJft6BfWUx8FSEt76O4iaCE13axt0dzY",
-  authDomain: "habit-9e26c.firebaseapp.com",
-  projectId: "habit-9e26c",
-  storageBucket: "habit-9e26c.firebasestorage.app",
-  messagingSenderId: "536564377863",
-  appId: "1:536564377863:web:c2d91a99d7e0f0369abda2"
+  apiKey: "AIzaSyCMJft6BfWUx8FSEt76O4iaCE13axt0dzY",
+  authDomain: "habit-9e26c.firebaseapp.com",
+  projectId: "habit-9e26c",
+  storageBucket: "habit-9e26c.firebasestorage.app",
+  messagingSenderId: "536564377863",
+  appId: "1:536564377863:web:c2d91a99d7e0f0369abda2"
 };
+
+const firebaseDiagnostics = validateFirebaseConfig(firebaseConfig);
+if (typeof document !== "undefined" && document.documentElement) {
+  document.documentElement.dataset.firebaseEnv = firebaseDiagnostics.environment;
+}
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -49,6 +115,16 @@ const nextBtn = document.getElementById("next-btn");
 const datePicker = document.getElementById("date-picker");
 const viewingDateLabel = document.getElementById("viewing-date");
 const debugOutput = document.getElementById("debug-output");
+if (debugOutput) {
+  const lines = [
+    "Firebase 設定を確認しました",
+    `環境: ${firebaseDiagnostics.environment}`,
+    firebaseDiagnostics.origin ? `origin: ${firebaseDiagnostics.origin}` : null,
+    firebaseDiagnostics.authDomain ? `authDomain: ${firebaseDiagnostics.authDomain}` : null,
+    "データを読み込み中...",
+  ].filter(Boolean);
+  debugOutput.textContent = lines.join("\n");
+}
 const exportBtn = document.getElementById("export-btn");
 const exportModal = document.getElementById("export-modal");
 const exportForm = document.getElementById("export-form");
