@@ -78,6 +78,7 @@ let activeHabitsCache = [];
 let historyChartInstance = null;
 let recentEntriesCache = null;
 let currentEntryData = null;
+let habitInputState = {};
 let toastHideTimer = null;
 let toastRemoveTimer = null;
 
@@ -107,58 +108,173 @@ function renderActiveHabits(habits) {
     emptyItem.className = "habit-list__item habit-list__item--empty";
     emptyItem.textContent = "アクティブな習慣がありません";
     habitListElement.appendChild(emptyItem);
-    refreshHabitInputs(currentEntryData);
+    habitInputState = {};
     return;
   }
 
   sorted.forEach((habit) => {
     const item = document.createElement("li");
     item.className = "habit-list__item";
+    if (habit?.id) {
+      item.dataset.habitId = habit.id;
+    }
 
-    const label = document.createElement("label");
-    label.className = "habit-toggle";
+    const mode = getHabitMode(habit);
+    if (habit?.id && habitInputState[habit.id] === undefined) {
+      let initialValue = null;
+      if (currentEntryData) {
+        const extracted = extractHabitValue(currentEntryData, habit);
+        if (mode === "boolean") {
+          initialValue = normalizeBooleanValue(extracted);
+        } else {
+          initialValue = normalizeNumericValue(extracted);
+        }
+      }
+      habitInputState[habit.id] = initialValue ?? null;
+    }
 
-    const input = document.createElement("input");
-    input.className = "habit-toggle__input";
-    input.type = "checkbox";
-    input.id = `habit-${habit.id}`;
+    if (mode === "boolean") {
+      const label = document.createElement("label");
+      label.className = "habit-toggle";
 
-    const span = document.createElement("span");
-    span.className = "habit-toggle__label";
-    span.textContent = habit.name || "(名称未設定)";
+      const input = document.createElement("input");
+      input.className = "habit-toggle__input";
+      input.type = "checkbox";
+      input.id = `habit-${habit.id}`;
 
-    label.appendChild(input);
-    label.appendChild(span);
-    item.appendChild(label);
+      input.addEventListener("change", () => {
+        if (!habit?.id) return;
+        habitInputState[habit.id] = input.checked;
+        input.indeterminate = false;
+      });
+
+      input.addEventListener("contextmenu", (event) => {
+        if (!habit?.id) return;
+        event.preventDefault();
+        habitInputState[habit.id] = null;
+        updateHabitInputsFromState();
+      });
+
+      const span = document.createElement("span");
+      span.className = "habit-toggle__label";
+      span.textContent = habit.name || "(名称未設定)";
+
+      label.appendChild(input);
+      label.appendChild(span);
+      item.appendChild(label);
+    } else {
+      const wrapper = document.createElement("label");
+      wrapper.className = "habit-number";
+
+      const nameElement = document.createElement("span");
+      nameElement.className = "habit-number__label";
+      nameElement.textContent = habit.name || "(名称未設定)";
+
+      const control = document.createElement("div");
+      control.className = "habit-number__control";
+
+      const input = document.createElement("input");
+      input.className = "habit-number__input";
+      input.type = "number";
+      input.inputMode = "decimal";
+      input.step = "any";
+      input.id = `habit-${habit.id}`;
+
+      input.addEventListener("input", () => {
+        if (!habit?.id) return;
+        const raw = input.value.trim();
+        if (raw === "") {
+          habitInputState[habit.id] = null;
+          return;
+        }
+        const parsed = parseFloat(raw);
+        habitInputState[habit.id] = Number.isFinite(parsed) ? parsed : null;
+      });
+
+      input.addEventListener("change", () => {
+        if (!habit?.id) return;
+        const raw = input.value.trim();
+        if (raw === "") {
+          habitInputState[habit.id] = null;
+        } else {
+          const parsed = parseFloat(raw);
+          habitInputState[habit.id] = Number.isFinite(parsed) ? parsed : null;
+        }
+        updateHabitInputsFromState();
+      });
+
+      const unitElement = document.createElement("span");
+      unitElement.className = "habit-number__unit";
+      unitElement.textContent = habit.unit ? habit.unit : "";
+
+      control.appendChild(input);
+      control.appendChild(unitElement);
+
+      wrapper.appendChild(nameElement);
+      wrapper.appendChild(control);
+      item.appendChild(wrapper);
+    }
+
     habitListElement.appendChild(item);
   });
 
-  refreshHabitInputs(currentEntryData);
+  updateHabitInputsFromState();
 }
 
-function refreshHabitInputs(entry) {
-  if (!habitListElement) return;
-  const inputs = habitListElement.querySelectorAll(".habit-toggle__input");
-  inputs.forEach((input) => {
-    if (!(input instanceof HTMLInputElement)) return;
-    const habitId = input.id.replace("habit-", "");
-    const habit = activeHabitsCache.find((item) => item.id === habitId);
-    if (!habit) {
-      input.checked = false;
-      input.indeterminate = false;
-      input.dataset.state = "unset";
-      return;
-    }
-    const value = extractHabitValue(entry, habit);
-    const normalized = normalizeBooleanValue(value);
-    if (normalized == null) {
-      input.checked = false;
-      input.indeterminate = false;
-      input.dataset.state = "unset";
+function setHabitInputStateFromEntry(entry) {
+  habitInputState = {};
+  if (!entry) return;
+
+  if (entry.values && typeof entry.values === "object") {
+    habitInputState = { ...entry.values };
+  }
+
+  activeHabitsCache.forEach((habit) => {
+    if (!habit?.id || habitInputState[habit.id] !== undefined) return;
+    const mode = getHabitMode(habit);
+    const extracted = extractHabitValue(entry, habit);
+    if (mode === "boolean") {
+      habitInputState[habit.id] = normalizeBooleanValue(extracted);
     } else {
-      input.checked = normalized;
-      input.indeterminate = false;
-      input.dataset.state = normalized ? "true" : "false";
+      habitInputState[habit.id] = normalizeNumericValue(extracted);
+    }
+  });
+}
+
+function updateHabitInputsFromState() {
+  if (!habitListElement) return;
+  const items = habitListElement.querySelectorAll("[data-habit-id]");
+  items.forEach((item) => {
+    if (!(item instanceof HTMLElement)) return;
+    const habitId = item.dataset.habitId;
+    if (!habitId) return;
+    const habit = activeHabitsCache.find((candidate) => candidate.id === habitId);
+    if (!habit) return;
+    const mode = getHabitMode(habit);
+    if (mode === "boolean") {
+      const input = item.querySelector(".habit-toggle__input");
+      if (!(input instanceof HTMLInputElement)) return;
+      const normalized = normalizeBooleanValue(habitInputState[habitId]);
+      if (normalized == null) {
+        habitInputState[habitId] = null;
+        input.checked = false;
+        input.indeterminate = true;
+      } else {
+        habitInputState[habitId] = normalized;
+        input.checked = normalized;
+        input.indeterminate = false;
+      }
+    } else {
+      const input = item.querySelector(".habit-number__input");
+      if (!(input instanceof HTMLInputElement)) return;
+      const numeric = normalizeNumericValue(habitInputState[habitId]);
+      if (numeric == null) {
+        habitInputState[habitId] = null;
+        input.value = "";
+      } else {
+        habitInputState[habitId] = numeric;
+        input.value = Number.isInteger(numeric) ? String(numeric) : String(numeric);
+      }
     }
   });
 }
@@ -350,11 +466,40 @@ async function loadEntry(dateStr) {
 
 async function saveEntry(dateStr) {
   const timestamp = new Date();
+  const values = { ...(currentEntryData?.values ?? {}) };
+  activeHabitsCache.forEach((habit) => {
+    if (!habit?.id) return;
+    const mode = getHabitMode(habit);
+    if (mode === "boolean") {
+      const normalized = normalizeBooleanValue(habitInputState[habit.id]);
+      values[habit.id] = normalized;
+    } else {
+      const rawValue = habitInputState[habit.id];
+      let numericValue = null;
+      if (rawValue == null) {
+        numericValue = null;
+      } else if (typeof rawValue === "number") {
+        numericValue = Number.isFinite(rawValue) ? rawValue : null;
+      } else if (typeof rawValue === "string" && rawValue.trim() !== "") {
+        const parsed = parseFloat(rawValue);
+        numericValue = Number.isFinite(parsed) ? parsed : null;
+      } else {
+        numericValue = normalizeNumericValue(rawValue);
+      }
+      values[habit.id] = numericValue;
+    }
+  });
+  Object.keys(values).forEach((key) => {
+    if (values[key] === undefined) {
+      values[key] = null;
+    }
+  });
   const data = {
     date: dateStr,
     study: { minutes: Number(studyMinutesInput.value || 0) },
     diary: diaryInput.value || "",
     memo: memoInput.value || "",
+    values,
     updatedAt: timestamp,
   };
   const docId = `entry_${dateStr}`;
@@ -380,14 +525,16 @@ function showEntry(dateStr, entry) {
     diaryInput.value = "";
     memoInput.value = "";
     debugOutput.textContent = "(データなし)";
-    refreshHabitInputs(null);
+    habitInputState = {};
+    updateHabitInputsFromState();
   } else {
     currentEntryData = entry;
     studyMinutesInput.value = entry.study?.minutes ?? "";
     diaryInput.value = entry.diary ?? "";
     memoInput.value = entry.memo ?? "";
     debugOutput.textContent = JSON.stringify(entry, null, 2);
-    refreshHabitInputs(entry);
+    setHabitInputStateFromEntry(entry);
+    updateHabitInputsFromState();
   }
 }
 
@@ -411,7 +558,8 @@ saveBtn?.addEventListener("click", async () => {
     const merged = currentEntryData ? { ...currentEntryData, ...saved } : saved;
     currentEntryData = merged;
     debugOutput.textContent = JSON.stringify(merged, null, 2);
-    refreshHabitInputs(merged);
+    setHabitInputStateFromEntry(merged);
+    updateHabitInputsFromState();
     if (saveStatus) {
       saveStatus.textContent = "保存しました";
       setTimeout(() => {
@@ -523,7 +671,7 @@ function normalizeNumericValue(value) {
     return Number.isFinite(value) ? value : null;
   }
   if (typeof value === "string" && value.trim() !== "") {
-    const parsed = Number(value);
+    const parsed = parseFloat(value);
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
@@ -532,7 +680,13 @@ function normalizeNumericValue(value) {
 function extractHabitValue(entry, habit) {
   if (!entry || !habit) return null;
   const identifiers = [habit.id, habit.name].filter((identifier) => identifier != null);
-  const candidates = [entry.habits, entry.habitRecords, entry.habitEntries, entry.habitResults];
+  const candidates = [
+    entry.values,
+    entry.habits,
+    entry.habitRecords,
+    entry.habitEntries,
+    entry.habitResults,
+  ];
 
   const resolveFromCandidate = (candidate) => {
     if (!candidate) return undefined;
@@ -917,61 +1071,36 @@ async function fetchEntriesBetween(fromDate, toDate) {
   return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
 }
 
-async function fetchHabitsBetween(fromDate, toDate) {
-  const habitsRef = collection(db, "habits");
-  const habitsQuery = query(
-    habitsRef,
-    where("date", ">=", fromDate),
-    where("date", "<=", toDate),
-    orderBy("date")
-  );
-  const snap = await getDocs(habitsQuery);
-  return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-}
-
 async function exportCsv(fromDate, toDate) {
   const [entries, habits] = await Promise.all([
     fetchEntriesBetween(fromDate, toDate),
-    fetchHabitsBetween(fromDate, toDate),
+    fetchHabits({ activeOnly: false }),
   ]);
 
-  const dateSet = new Set();
-  const entryMap = new Map();
-  entries.forEach((entry) => {
-    if (entry.date) {
-      dateSet.add(entry.date);
-      entryMap.set(entry.date, entry);
-    }
-  });
+  const sortedHabits = sortHabitsByOrder(habits);
+  const header = ["date", "diary", ...sortedHabits.map((habit) => habit.name || "(名称未設定)")];
 
-  const habitNamesSet = new Set();
-  const habitMap = new Map();
-  habits.forEach((habit) => {
-    if (!habit.date || !habit.name) return;
-    dateSet.add(habit.date);
-    habitNamesSet.add(habit.name);
-    if (!habitMap.has(habit.date)) {
-      habitMap.set(habit.date, new Map());
-    }
-    habitMap.get(habit.date).set(habit.name, habit);
-  });
+  const sortedEntries = entries
+    .filter((entry) => entry.date)
+    .sort((a, b) => {
+      const aDate = a.date ?? "";
+      const bDate = b.date ?? "";
+      return aDate.localeCompare(bDate);
+    });
 
-  const sortedDates = Array.from(dateSet).sort();
-  const habitNames = Array.from(habitNamesSet).sort();
+  const rows = [header];
 
-  const rows = [];
-  rows.push(["date", "diary", ...habitNames]);
-
-  sortedDates.forEach((date) => {
-    const entry = entryMap.get(date) ?? {};
-    const diary = entry.diary ?? "";
-    const row = [date, diary];
-    habitNames.forEach((habitName) => {
-      const habitRecord = habitMap.get(date)?.get(habitName);
-      if (habitRecord == null || habitRecord.done == null) {
-        row.push("");
+  sortedEntries.forEach((entry) => {
+    const row = [entry.date ?? "", entry.diary ?? ""];
+    sortedHabits.forEach((habit) => {
+      const mode = getHabitMode(habit);
+      const rawValue = extractHabitValue(entry, habit);
+      if (mode === "boolean") {
+        const normalized = normalizeBooleanValue(rawValue);
+        row.push(normalized == null ? "" : normalized ? "1" : "0");
       } else {
-        row.push(habitRecord.done ? "TRUE" : "FALSE");
+        const numeric = normalizeNumericValue(rawValue);
+        row.push(numeric == null ? "" : String(numeric));
       }
     });
     rows.push(row);
