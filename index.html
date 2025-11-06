@@ -8,6 +8,12 @@
 <body>
   <h1>今日の振り返り</h1>
 
+  <section>
+    <h2>習慣</h2>
+    <ul id="habit-list"></ul>
+    <button id="open-habit-modal">習慣を編集</button>
+  </section>
+
   <p id="today-label"></p>
 
   <label>
@@ -34,6 +40,49 @@
   <p id="viewing-date"></p>
 
   <pre id="debug-output"></pre>
+
+  <dialog id="habit-modal">
+    <form method="dialog">
+      <h3>習慣を編集</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>名前</th>
+            <th>タイプ</th>
+            <th>単位</th>
+            <th>有効</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="habit-table-body"></tbody>
+      </table>
+
+      <h4>新規習慣を追加</h4>
+      <div id="habit-new-form">
+        <label>
+          名前:
+          <input type="text" id="new-habit-name" required />
+        </label>
+        <label>
+          タイプ:
+          <input type="text" id="new-habit-type" required />
+        </label>
+        <label>
+          単位:
+          <input type="text" id="new-habit-unit" required />
+        </label>
+        <label>
+          有効:
+          <input type="checkbox" id="new-habit-active" checked />
+        </label>
+        <button type="button" id="add-habit-btn">追加</button>
+      </div>
+
+      <div>
+        <button value="cancel" id="habit-modal-close">閉じる</button>
+      </div>
+    </form>
+  </dialog>
 
   <script type="module" src="./main.js"></script>
 </body>
