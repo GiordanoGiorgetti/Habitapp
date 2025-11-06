@@ -11,19 +11,24 @@
     <header class="header-section">
       <h1 class="app-title">今日の振り返り</h1>
       <p class="app-subtitle" id="today-label"></p>
+      <div class="header-date-controls">
+        <label class="header-date-controls__label" for="date-picker">表示する日付</label>
+        <div class="header-date-controls__row">
+          <input class="header-date-controls__input" type="date" id="date-picker" />
+          <div class="header-date-controls__buttons">
+            <button class="date-navigation__button" id="prev-btn" type="button">前日</button>
+            <button class="date-navigation__button date-navigation__button--primary" id="today-btn" type="button">今日</button>
+            <button class="date-navigation__button" id="next-btn" type="button">次の日</button>
+          </div>
+        </div>
+        <p class="header-date-controls__current" id="viewing-date"></p>
+      </div>
       <div class="header-actions">
         <button class="header-actions__button" id="history-btn" type="button">履歴を見る</button>
       </div>
     </header>
 
     <main class="app-main">
-      <section class="card app-section date-navigation-section">
-        <div class="date-navigation__controls">
-          <button class="date-navigation__button" id="prev-btn" type="button">前日</button>
-          <button class="date-navigation__button date-navigation__button--primary" id="today-btn" type="button">今日</button>
-        </div>
-        <p class="date-navigation__current" id="viewing-date"></p>
-      </section>
 
       <section class="card app-section habit-list-section">
         <div class="section-title-row">
@@ -64,6 +69,8 @@
       </section>
     </main>
   </div>
+
+  <div class="toast" id="app-toast" role="status" aria-live="polite" hidden></div>
 
   <div class="modal" id="export-modal" hidden>
     <div class="modal__overlay" data-modal-close></div>

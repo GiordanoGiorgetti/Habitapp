@@ -6,6 +6,7 @@ import {
   where,
   orderBy,
   getDocs,
+  getDoc,
   doc,
   setDoc,
   addDoc,
@@ -43,6 +44,8 @@ const saveBtn = document.getElementById("save-btn");
 const saveStatus = document.getElementById("save-status");
 const prevBtn = document.getElementById("prev-btn");
 const todayBtn = document.getElementById("today-btn");
+const nextBtn = document.getElementById("next-btn");
+const datePicker = document.getElementById("date-picker");
 const viewingDateLabel = document.getElementById("viewing-date");
 const debugOutput = document.getElementById("debug-output");
 const exportBtn = document.getElementById("export-btn");
@@ -68,15 +71,19 @@ const historyChartContainer = document.getElementById("history-chart-container")
 const historyChartEmpty = document.getElementById("history-chart-empty");
 const historyCalendar = document.getElementById("history-calendar");
 const historyCalendarEmpty = document.getElementById("history-calendar-empty");
+const toastElement = document.getElementById("app-toast");
 
 let habitEditorCache = [];
 let activeHabitsCache = [];
 let historyChartInstance = null;
 let recentEntriesCache = null;
+let currentEntryData = null;
+let toastHideTimer = null;
+let toastRemoveTimer = null;
 
 const HISTORY_RANGE_DAYS = 30;
 
-todayLabel.textContent = `今日は ${currentViewingDate} です`;
+todayLabel.textContent = `今日は ${formatDate(today)} です`;
 
 function parseOrder(order) {
   const value = Number(order);
@@ -100,6 +107,7 @@ function renderActiveHabits(habits) {
     emptyItem.className = "habit-list__item habit-list__item--empty";
     emptyItem.textContent = "アクティブな習慣がありません";
     habitListElement.appendChild(emptyItem);
+    refreshHabitInputs(currentEntryData);
     return;
   }
 
@@ -124,6 +132,69 @@ function renderActiveHabits(habits) {
     item.appendChild(label);
     habitListElement.appendChild(item);
   });
+
+  refreshHabitInputs(currentEntryData);
+}
+
+function refreshHabitInputs(entry) {
+  if (!habitListElement) return;
+  const inputs = habitListElement.querySelectorAll(".habit-toggle__input");
+  inputs.forEach((input) => {
+    if (!(input instanceof HTMLInputElement)) return;
+    const habitId = input.id.replace("habit-", "");
+    const habit = activeHabitsCache.find((item) => item.id === habitId);
+    if (!habit) {
+      input.checked = false;
+      input.indeterminate = false;
+      input.dataset.state = "unset";
+      return;
+    }
+    const value = extractHabitValue(entry, habit);
+    const normalized = normalizeBooleanValue(value);
+    if (normalized == null) {
+      input.checked = false;
+      input.indeterminate = false;
+      input.dataset.state = "unset";
+    } else {
+      input.checked = normalized;
+      input.indeterminate = false;
+      input.dataset.state = normalized ? "true" : "false";
+    }
+  });
+}
+
+function showToast(message, variant = "success") {
+  if (!toastElement) return;
+  const variants = ["success", "error", "info"];
+  toastElement.hidden = false;
+  variants.forEach((name) => toastElement.classList.remove(`toast--${name}`));
+  if (variants.includes(variant)) {
+    toastElement.classList.add(`toast--${variant}`);
+  } else {
+    toastElement.classList.add("toast--success");
+  }
+  toastElement.textContent = message;
+  // Force reflow so that successive toasts animate correctly
+  void toastElement.offsetWidth;
+  toastElement.classList.add("is-visible");
+
+  if (toastHideTimer) {
+    clearTimeout(toastHideTimer);
+    toastHideTimer = null;
+  }
+  if (toastRemoveTimer) {
+    clearTimeout(toastRemoveTimer);
+    toastRemoveTimer = null;
+  }
+
+  toastHideTimer = setTimeout(() => {
+    toastElement.classList.remove("is-visible");
+    toastRemoveTimer = setTimeout(() => {
+      toastElement.hidden = true;
+      toastRemoveTimer = null;
+    }, 300);
+    toastHideTimer = null;
+  }, 2500);
 }
 
 function renderHabitEditorList(habits) {
@@ -270,63 +341,117 @@ async function loadHabitsForEditor() {
 }
 
 async function loadEntry(dateStr) {
-  const q = query(collection(db, "entries"), where("date", "==", dateStr));
-  const snap = await getDocs(q);
-  if (snap.empty) return null;
-  let data = null;
-  snap.forEach((docSnap) => (data = { id: docSnap.id, ...docSnap.data() }));
-  return data;
+  const docId = `entry_${dateStr}`;
+  const entryRef = doc(db, "entries", docId);
+  const snap = await getDoc(entryRef);
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() };
 }
 
 async function saveEntry(dateStr) {
+  const timestamp = new Date();
   const data = {
     date: dateStr,
     study: { minutes: Number(studyMinutesInput.value || 0) },
     diary: diaryInput.value || "",
     memo: memoInput.value || "",
-    updatedAt: new Date(),
+    updatedAt: timestamp,
   };
   const docId = `entry_${dateStr}`;
   await setDoc(doc(db, "entries", docId), data, { merge: true });
-  return data;
+  return { id: docId, ...data };
 }
 
 function showEntry(dateStr, entry) {
   currentViewingDate = dateStr;
-  viewingDateLabel.textContent = `表示中の日付: ${dateStr}`;
+  if (viewingDateLabel) {
+    viewingDateLabel.textContent = `表示中の日付: ${dateStr}`;
+  }
+  if (datePicker) {
+    datePicker.value = dateStr;
+  }
+  if (saveStatus) {
+    saveStatus.textContent = "";
+  }
 
   if (!entry) {
+    currentEntryData = null;
     studyMinutesInput.value = "";
     diaryInput.value = "";
     memoInput.value = "";
     debugOutput.textContent = "(データなし)";
+    refreshHabitInputs(null);
   } else {
+    currentEntryData = entry;
     studyMinutesInput.value = entry.study?.minutes ?? "";
     diaryInput.value = entry.diary ?? "";
     memoInput.value = entry.memo ?? "";
     debugOutput.textContent = JSON.stringify(entry, null, 2);
+    refreshHabitInputs(entry);
   }
 }
 
-saveBtn.addEventListener("click", async () => {
-  saveStatus.textContent = "保存中...";
-  const data = await saveEntry(currentViewingDate);
-  saveStatus.textContent = "保存しました";
-  debugOutput.textContent = JSON.stringify(data, null, 2);
-  setTimeout(() => (saveStatus.textContent = ""), 1500);
+async function changeViewingDate(dateStr) {
+  if (!dateStr) return;
+  try {
+    const entry = await loadEntry(dateStr);
+    showEntry(dateStr, entry);
+  } catch (error) {
+    console.error("Failed to load entry", error);
+    showToast("データの読み込みに失敗しました", "error");
+  }
+}
+
+saveBtn?.addEventListener("click", async () => {
+  if (saveStatus) {
+    saveStatus.textContent = "保存中...";
+  }
+  try {
+    const saved = await saveEntry(currentViewingDate);
+    const merged = currentEntryData ? { ...currentEntryData, ...saved } : saved;
+    currentEntryData = merged;
+    debugOutput.textContent = JSON.stringify(merged, null, 2);
+    refreshHabitInputs(merged);
+    if (saveStatus) {
+      saveStatus.textContent = "保存しました";
+      setTimeout(() => {
+        if (saveStatus.textContent === "保存しました") {
+          saveStatus.textContent = "";
+        }
+      }, 1500);
+    }
+    showToast("保存しました", "success");
+  } catch (error) {
+    console.error("Failed to save entry", error);
+    if (saveStatus) {
+      saveStatus.textContent = "保存に失敗しました";
+    }
+    showToast("保存に失敗しました", "error");
+  }
 });
 
-prevBtn.addEventListener("click", async () => {
+prevBtn?.addEventListener("click", async () => {
   const d = new Date(currentViewingDate);
   d.setDate(d.getDate() - 1);
-  const dateStr = formatDate(d);
-  const entry = await loadEntry(dateStr);
-  showEntry(dateStr, entry);
+  await changeViewingDate(formatDate(d));
 });
 
-todayBtn.addEventListener("click", async () => {
-  const entry = await loadEntry(formatDate(today));
-  showEntry(formatDate(today), entry);
+nextBtn?.addEventListener("click", async () => {
+  const d = new Date(currentViewingDate);
+  d.setDate(d.getDate() + 1);
+  await changeViewingDate(formatDate(d));
+});
+
+todayBtn?.addEventListener("click", async () => {
+  await changeViewingDate(formatDate(today));
+});
+
+datePicker?.addEventListener("change", async (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  const value = target.value;
+  if (!value) return;
+  await changeViewingDate(value);
 });
 
 function toggleModal(show) {
@@ -1122,4 +1247,4 @@ exportForm?.addEventListener("submit", async (event) => {
 refreshActiveHabitList();
 
 // 起動時に今日のデータを読み込む
-loadEntry(currentViewingDate).then((entry) => showEntry(currentViewingDate, entry));
+changeViewingDate(currentViewingDate);
