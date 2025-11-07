@@ -1,5 +1,11 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
+  getAuth,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import {
   getFirestore,
   collection,
   query,
@@ -93,6 +99,37 @@ if (typeof document !== "undefined" && document.documentElement) {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
+
+let pendingAuthPromise = null;
+let resolvePendingAuth = null;
+
+function getPendingAuthPromise() {
+  if (!pendingAuthPromise) {
+    pendingAuthPromise = new Promise((resolve) => {
+      resolvePendingAuth = resolve;
+    });
+  }
+  return pendingAuthPromise;
+}
+
+function resolvePendingAuthPromise(user) {
+  if (resolvePendingAuth) {
+    resolvePendingAuth(user);
+    pendingAuthPromise = null;
+    resolvePendingAuth = null;
+  }
+}
+
+async function ensureAuthenticated() {
+  if (auth.currentUser) {
+    return auth.currentUser;
+  }
+
+  const waitForAuth = getPendingAuthPromise();
+  toggleAuthModal(true);
+  return waitForAuth;
+}
 
 // ===== 日付処理 =====
 function formatDate(d) {
@@ -183,6 +220,13 @@ const habitEditorList = document.getElementById("habit-editor-list");
 const habitEditorEmpty = document.getElementById("habit-editor-empty");
 const newHabitForm = document.getElementById("new-habit-form");
 const habitEditorError = document.getElementById("habit-editor-error");
+const authModal = document.getElementById("auth-modal");
+const authForm = document.getElementById("auth-form");
+const authEmailInput = document.getElementById("auth-email");
+const authPasswordInput = document.getElementById("auth-password");
+const authErrorMessage = document.getElementById("auth-error");
+const authUserLabel = document.getElementById("auth-user-label");
+const signOutBtn = document.getElementById("sign-out-btn");
 const historyBtn = document.getElementById("history-btn");
 const historyModal = document.getElementById("history-modal");
 const historyHabitSelect = document.getElementById("history-habit-select");
@@ -443,6 +487,21 @@ function logAndToastError(logMessage, error, toastMessage = "エラーが発生�
   showToast(toastMessage, "error");
 }
 
+function getAuthErrorMessage(error) {
+  const code = typeof error === "object" && error ? error.code : "";
+  switch (code) {
+    case "auth/invalid-email":
+    case "auth/user-not-found":
+    case "auth/wrong-password":
+    case "auth/invalid-credential":
+      return "メールアドレスまたはパスワードが正しくありません";
+    case "auth/too-many-requests":
+      return "試行回数が多すぎます。しばらく待ってから再試行してください";
+    default:
+      return "ログインに失敗しました";
+  }
+}
+
 let lastKnownOnlineStatus = null;
 
 function updateConnectivityState(isOnline, { silent = false } = {}) {
@@ -581,6 +640,7 @@ function renderHabitEditorList(habits) {
 }
 
 async function fetchHabits({ activeOnly = false } = {}) {
+  await ensureAuthenticated();
   const habitsRef = collection(db, "habits");
   let habitsQuery;
   if (activeOnly) {
@@ -616,6 +676,7 @@ async function loadHabitsForEditor() {
 }
 
 async function loadEntry(dateStr) {
+  await ensureAuthenticated();
   const docId = `entry_${dateStr}`;
   const entryRef = doc(db, "entries", docId);
   const snap = await getDoc(entryRef);
@@ -624,6 +685,7 @@ async function loadEntry(dateStr) {
 }
 
 async function saveEntry(dateStr) {
+  await ensureAuthenticated();
   const values = { ...(currentEntryData?.values ?? {}) };
   activeHabitsCache.forEach((habit) => {
     if (!habit?.id) return;
@@ -798,6 +860,68 @@ datePicker?.addEventListener("change", async (event) => {
   await changeViewingDate(value);
 });
 
+function toggleAuthModal(show) {
+  if (!authModal) return;
+  authModal.hidden = !show;
+  if (show && authEmailInput instanceof HTMLInputElement) {
+    window.setTimeout(() => {
+      authEmailInput.focus();
+    }, 0);
+  }
+  if (!show && authForm instanceof HTMLFormElement) {
+    authForm.reset();
+  }
+  if (!show && authErrorMessage) {
+    authErrorMessage.textContent = "";
+  }
+}
+
+function updateAuthUI(user) {
+  if (user) {
+    toggleAuthModal(false);
+    if (authUserLabel) {
+      const label = user.email || "ログイン中";
+      authUserLabel.textContent = label;
+      authUserLabel.hidden = false;
+    }
+    if (signOutBtn) {
+      signOutBtn.hidden = false;
+    }
+    if (authErrorMessage) {
+      authErrorMessage.textContent = "";
+    }
+  } else {
+    if (authUserLabel) {
+      authUserLabel.textContent = "";
+      authUserLabel.hidden = true;
+    }
+    if (signOutBtn) {
+      signOutBtn.hidden = true;
+    }
+    toggleAuthModal(true);
+  }
+}
+
+onAuthStateChanged(
+  auth,
+  (user) => {
+    if (user) {
+      resolvePendingAuthPromise(user);
+    } else {
+      getPendingAuthPromise();
+    }
+    updateAuthUI(user);
+  },
+  (error) => {
+    console.error("Failed to observe auth state", error);
+    if (authErrorMessage) {
+      authErrorMessage.textContent = getAuthErrorMessage(error);
+    }
+    getPendingAuthPromise();
+    toggleAuthModal(true);
+  }
+);
+
 function toggleModal(show) {
   if (!exportModal) return;
   if (show) {
@@ -934,6 +1058,7 @@ function extractHabitValue(entry, habit) {
 }
 
 async function fetchRecentEntries(days = HISTORY_RANGE_DAYS) {
+  await ensureAuthenticated();
   const endDate = new Date();
   const startDate = new Date();
   startDate.setDate(endDate.getDate() - (days - 1));
@@ -1256,6 +1381,7 @@ function toggleHistoryModal(show) {
 }
 
 async function fetchEntriesBetween(fromDate, toDate) {
+  await ensureAuthenticated();
   const entriesRef = collection(db, "entries");
   const entriesQuery = query(
     entriesRef,
@@ -1374,6 +1500,40 @@ historyHabitSelect?.addEventListener("change", () => {
   updateHistoryView();
 });
 
+authForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!(authEmailInput instanceof HTMLInputElement) || !(authPasswordInput instanceof HTMLInputElement)) {
+    return;
+  }
+  const email = authEmailInput.value.trim();
+  const password = authPasswordInput.value;
+  if (!email || !password) {
+    if (authErrorMessage) {
+      authErrorMessage.textContent = "メールアドレスとパスワードを入力してください";
+    }
+    return;
+  }
+  if (authErrorMessage) {
+    authErrorMessage.textContent = "";
+  }
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+  } catch (error) {
+    console.error("Failed to sign in", error);
+    if (authErrorMessage) {
+      authErrorMessage.textContent = getAuthErrorMessage(error);
+    }
+  }
+});
+
+signOutBtn?.addEventListener("click", async () => {
+  try {
+    await signOut(auth);
+  } catch (error) {
+    logAndToastError("Failed to sign out", error, "ログアウトに失敗しました");
+  }
+});
+
 habitEditorList?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.target;
@@ -1412,6 +1572,7 @@ habitEditorList?.addEventListener("submit", async (event) => {
   }
 
   try {
+    await ensureAuthenticated();
     await setDoc(doc(db, "habits", habitId), updatePayload, { merge: true });
     habitEditorCache = habitEditorCache.map((habit) =>
       habit.id === habitId ? { ...habit, ...updatePayload } : habit
@@ -1450,6 +1611,7 @@ habitEditorList?.addEventListener("click", async (event) => {
   }
 
   try {
+    await ensureAuthenticated();
     await setDoc(
       doc(db, "habits", habitId),
       { active: false, updatedAt: serverTimestamp() },
@@ -1512,6 +1674,7 @@ newHabitForm?.addEventListener("submit", async (event) => {
   };
 
   try {
+    await ensureAuthenticated();
     await addDoc(collection(db, "habits"), payload);
     await loadHabitsForEditor();
     renderActiveHabits(activeHabitsCache);
@@ -1572,7 +1735,18 @@ updateConnectivityState(navigator.onLine, { silent: true });
 window.addEventListener("online", () => updateConnectivityState(true));
 window.addEventListener("offline", () => updateConnectivityState(false));
 
-refreshActiveHabitList();
+async function initializeAppData() {
+  try {
+    await ensureAuthenticated();
+  } catch (error) {
+    logAndToastError("Failed to authenticate user", error, "認証に失敗しました。ページを再読み込みしてください。");
+    return;
+  }
 
-// 起動時に今日のデータを読み込む
-changeViewingDate(currentViewingDate);
+  await refreshActiveHabitList();
+
+  // 起動時に今日のデータを読み込む
+  await changeViewingDate(currentViewingDate);
+}
+
+initializeAppData();

@@ -117,6 +117,9 @@ body {
   margin-top: var(--space-4);
   display: flex;
   justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
 .header-actions__button {
@@ -129,6 +132,24 @@ body {
   cursor: pointer;
   box-shadow: 0 10px 20px rgba(84, 104, 255, 0.25);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.header-actions__button--secondary {
+  background: transparent;
+  color: var(--color-primary);
+  border: 1px solid rgba(84, 104, 255, 0.4);
+  box-shadow: none;
+}
+
+.header-actions__button--secondary:hover {
+  transform: none;
+  box-shadow: none;
+  background-color: rgba(84, 104, 255, 0.08);
+}
+
+.header-actions__user {
+  color: var(--color-muted);
+  font-size: 0.9rem;
 }
 
 .header-actions__button:hover {
@@ -588,6 +609,12 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+.modal__description {
+  margin: var(--space-3) 0;
+  color: var(--color-muted);
+  font-size: 0.95rem;
 }
 
 .modal__submit {
